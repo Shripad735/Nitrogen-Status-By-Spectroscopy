@@ -149,6 +149,9 @@ def main():
 
     analyze_explained_variables_per_crop(df, include_negatives=True)
 
+    # Drop the helper columns: crop & part
+    df = df.drop(columns=[IDComponents.crop.value, IDComponents.part.value])
+
     # Split the dataset into train, validation, and test sets
     train_df, validation_df, test_df = split_dataset(df)
 
