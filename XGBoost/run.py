@@ -1,22 +1,19 @@
-from xgboost_implement import XGBoostRegressorCV
+import os
 from constants_config import DATA_FOLDER
+from XGBoost.xgboost_multioutput_implement import XGBoostMultiOutput
+
 
 
 def main():
-    # Initialize and load data
-    xgb_cv = XGBoostRegressorCV()
-    xgb_cv.load_data(f"../{DATA_FOLDER}/train_data.parquet", f"../{DATA_FOLDER}/validation_data.parquet")
+    train_path = f"{DATA_FOLDER}/train_data.parquet"
+    val_path = f"{DATA_FOLDER}/validation_data.parquet"
+    test_path = f"{DATA_FOLDER}/test_data.parquet"
 
-    # Perform hyperparameter tuning, training, and validation
-    results = xgb_cv.perform_cv_train_with_tuning()
+    # Ensure the directory exists
+    os.makedirs(DATA_FOLDER, exist_ok=True)
 
-    # Display validation results
-    print("\nValidation Results:")
-    for target, metrics in results.items():
-        print(f"{target} - RMSE: {metrics['RMSE']:.4f}, R²: {metrics['R²']:.4f}")
-
-    # Plot feature importance for N_value
-    xgb_cv.plot_feature_importance("N_value")
+    xgb_multi_output = XGBoostMultiOutput()
+    xgb_multi_output.run(train_path, val_path, test_path)
 
 
 if __name__ == "__main__":
