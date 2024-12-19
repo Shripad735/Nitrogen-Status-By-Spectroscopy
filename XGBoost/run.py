@@ -3,7 +3,6 @@ from constants_config import DATA_FOLDER
 from XGBoost.xgboost_multioutput_implement import XGBoostMultiOutput
 
 
-
 def main():
     train_path = f"{DATA_FOLDER}/train_data.parquet"
     val_path = f"{DATA_FOLDER}/validation_data.parquet"
