@@ -23,4 +23,6 @@ class CropPart(str, Enum):
     leaf = 'lea'
 
 
-DATA_FOLDER = 'datasets'
+TARGET_VARIABLES = [ColumnName.n_value.value, ColumnName.sc_value.value, ColumnName.st_value.value]
+NON_FEATURE_COLUMNS = [ColumnName.id.value] + TARGET_VARIABLES
+DATA_FOLDER_PATH = '../datasets'
