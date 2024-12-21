@@ -238,8 +238,8 @@ class XGBoostMultiOutput:
             plt.plot(x_axis, train_rmse_mean, label=f"Train RMSE - {partial_config_name}", color=train_color)
             plt.plot(x_axis, val_rmse_mean, label=f"Validation RMSE - {partial_config_name}", color=val_color)
 
-        plt.title(f"Average Learning Curve - {config_name}")
-        plt.xlabel("Folds")
+        plt.title(f"All Learning Curves Based On The Best Configuration")
+        plt.xlabel("Number of Estimators")
         plt.ylabel("RMSE")
         plt.legend()
         plt.grid()
