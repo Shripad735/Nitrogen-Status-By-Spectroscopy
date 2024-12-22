@@ -1,17 +1,14 @@
 import os
-import shap
 import json
 import joblib
 import itertools
 import numpy as np
 import pandas as pd
 import xgboost as xgb
-from pdpbox import pdp
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 from sklearn.model_selection import KFold
 from sklearn.metrics import mean_squared_error
-# from sklearn.multioutput import MultiOutputRegressor
 from constants_config import TARGET_VARIABLES, NON_FEATURE_COLUMNS, TARGET_VARIABLES_WITH_MEAN, COLOR_PALETTE
 
 
@@ -57,7 +54,7 @@ class XGBoostMultiOutput:
         return configurations
 
     def train_and_evaluate(self, params, X_train, y_train, X_val, y_val):
-        # Create separate models for each target variable
+        # Create separate models for each target variable due to different training data that leads to different model
         models = []
         rmses = []
         for i in range(y_train.shape[1]):
@@ -118,6 +115,7 @@ class XGBoostMultiOutput:
         plt.show()
 
     def find_best_configuration(self, X_train, y_train, X_val, y_val):
+        # find the best hyperparameters for each target variable and the mean
         param_grid = self.get_param_grid()
         best_rmses = {target: float("inf") for target in TARGET_VARIABLES + ["mean"]}  # store best RMSEs
         best_params = {target: None for target in TARGET_VARIABLES + ["mean"]}  # store best params follows RMSEs
@@ -156,7 +154,7 @@ class XGBoostMultiOutput:
         fold_train_rmses = {key: [] for key in TARGET_VARIABLES}
         fold_val_rmses = {key: [] for key in TARGET_VARIABLES}
 
-        for train_index, val_index in tqdm(kf.split(X), desc="Cross-validation"):
+        for train_index, val_index in tqdm(kf.split(X), desc="Cross-validation", disable=False):
             X_train_fold, X_val_fold = X.iloc[train_index], X.iloc[val_index]
             y_train_fold, y_val_fold = y.iloc[train_index], y.iloc[val_index]
 
@@ -166,8 +164,8 @@ class XGBoostMultiOutput:
             for i, target in enumerate(y_train_fold.columns):
                 eval_set = [(X_train_fold, y_train_fold.iloc[:, i]), (X_val_fold, y_val_fold.iloc[:, i])]
                 model_params = {k: v for k, v in params.items() if k not in ['eval_set', 'eval_metric', 'verbose']}
-                model = xgb.XGBRegressor(**model_params, eval_metric='rmse', verbose=False)
-                model.fit(X_train_fold, y_train_fold.iloc[:, i], eval_set=eval_set)
+                model = xgb.XGBRegressor(**model_params, eval_metric='rmse')
+                model.fit(X_train_fold, y_train_fold.iloc[:, i], eval_set=eval_set, verbose=False)
                 models.append(model)
 
                 y_pred_val_fold = model.predict(X_val_fold)
@@ -222,21 +220,21 @@ class XGBoostMultiOutput:
 
     def plot_learning_curve(self, config_name):
         """Plots the learning curve for the given configuration."""
-        partial_config_names = [key for key in TARGET_VARIABLES_WITH_MEAN if key in config_name]
+        # partial_config_names = [key for key in TARGET_VARIABLES_WITH_MEAN if key in config_name]
         plt.figure(figsize=(10, 6))
 
-        for partial_config_name in partial_config_names:
-            n_estimators = self.best_params[partial_config_name]['n_estimators']
+        for var in TARGET_VARIABLES_WITH_MEAN:
+            n_estimators = self.best_params[var]['n_estimators']
             x_axis = range(1, n_estimators + 1)
 
-            train_rmse_mean = self.train_rmses[partial_config_name][:n_estimators]
-            val_rmse_mean = self.val_rmses[partial_config_name][:n_estimators]
+            train_rmse_mean = self.train_rmses[var][:n_estimators]
+            val_rmse_mean = self.val_rmses[var][:n_estimators]
 
-            train_color, val_color = COLOR_PALETTE.get(partial_config_name,
+            train_color, val_color = COLOR_PALETTE.get(var,
                                                        ('#D3D3D3', '#DCDCDC'))  # default to light gray
 
-            plt.plot(x_axis, train_rmse_mean, label=f"Train RMSE - {partial_config_name}", color=train_color)
-            plt.plot(x_axis, val_rmse_mean, label=f"Validation RMSE - {partial_config_name}", color=val_color)
+            plt.plot(x_axis, train_rmse_mean, label=f"Train RMSE - {var}", color=train_color)
+            plt.plot(x_axis, val_rmse_mean, label=f"Validation RMSE - {var}", color=val_color)
 
         plt.title(f"All Learning Curves Based On The Best Configuration")
         plt.xlabel("Number of Estimators")
@@ -245,90 +243,6 @@ class XGBoostMultiOutput:
         plt.grid()
         plt.savefig(os.path.join(self.save_dir, f"learning_curve_{config_name}.png"))
         plt.show()
-
-    # def plot_feature_importances(self, model, X_train):
-    #     """Plots mean feature importance."""
-    #     all_importances = [
-    #         est.feature_importances_ for est in model.estimators_
-    #     ]
-    #     mean_importance = np.mean(all_importances, axis=0)
-    #     sorted_idx = np.argsort(mean_importance)[::-1]
-    #     feature_names = X_train.columns[sorted_idx]
-    #     mean_importance = mean_importance[sorted_idx]
-    #
-    #     plt.figure(figsize=(12, 6))
-    #     plt.bar(feature_names[:20], mean_importance[:20])
-    #     plt.xticks(rotation=90)
-    #     plt.title("Mean Feature Importance")
-    #     plt.xlabel("Feature")
-    #     plt.ylabel("Mean Importance Score")
-    #     plt.tight_layout()
-    #     plt.savefig(os.path.join(self.save_dir, "mean_feature_importance.png"))
-    #     plt.show()
-    #
-
-    #
-    # def plot_residuals(self, model, X, y):
-    #     """Plots residuals for all target variables combined."""
-    #     y_pred = model.predict(X)
-    #     residuals = y - y_pred
-    #     residuals = residuals.values.flatten()  # Flatten to a 1D array
-    #
-    #     plt.figure(figsize=(8, 6))
-    #     plt.scatter(y_pred.flatten(), residuals, alpha=0.5)
-    #     plt.xlabel("Predicted Values")
-    #     plt.ylabel("Residuals")
-    #     plt.title("Combined Residuals Plot")
-    #     plt.axhline(y=0, color="r", linestyle="--")
-    #     plt.tight_layout()
-    #     plt.savefig(os.path.join(self.save_dir, "combined_residuals_plot.png"))
-    #     plt.show()
-    #
-    # def plot_predicted_vs_actual(self, model, X, y):
-    #     """Plots predicted vs actual values for all target variables combined."""
-    #     y_pred = model.predict(X)
-    #
-    #     plt.figure(figsize=(8, 6))
-    #     plt.scatter(y.values.flatten(), y_pred.flatten(), alpha=0.5)
-    #     plt.xlabel("Actual Values")
-    #     plt.ylabel("Predicted Values")
-    #     plt.title("Combined Predicted vs. Actual Plot")
-    #     plt.plot(
-    #         [y.min().min(), y.max().max()],
-    #         [y.min().min(), y.max().max()],
-    #         "k--", lw=2)  # Add a diagonal line for reference
-    #     plt.tight_layout()
-    #     plt.savefig(os.path.join(self.save_dir, "combined_predicted_vs_actual.png"))
-    #     plt.show()
-    #
-    # def plot_rmse_per_fold(self, rmses):
-    #     """Plots RMSE scores for each cross-validation fold."""
-    #     plt.figure(figsize=(8, 5))
-    #     plt.bar(range(1, len(rmses) + 1), rmses)
-    #     plt.xlabel("Fold")
-    #     plt.ylabel("RMSE")
-    #     plt.title("RMSE per Cross-Validation Fold")
-    #     plt.savefig(os.path.join(self.save_dir, "rmse_per_fold.png"))
-    #     plt.show()
-    #
-    # def plot_pdp(self, model, X, feature):
-    #     """Plots a Partial Dependence Plot for a single feature using the first estimator."""
-    #     pdp_feature = pdp.pdp_isolate(
-    #         model=model.estimators_[0],
-    #         dataset=X,
-    #         model_features=X.columns,
-    #         feature=feature,
-    #     )
-    #     pdp.pdp_plot(pdp_isolate_out=pdp_feature, feature_name=feature)
-    #     plt.savefig(os.path.join(self.save_dir, f"pdp_{feature}.png"))
-    #     plt.show()
-    #
-    # def plot_shap_summary(self, model, X):
-    #     """Plots a SHAP summary plot using the first estimator."""
-    #     explainer = shap.TreeExplainer(model.estimators_[0])
-    #     shap_values = explainer.shap_values(X)
-    #     shap.summary_plot(shap_values, X)
-    #     plt.savefig(os.path.join(self.save_dir, "shap_summary_plot.png"))
 
     def run(self, train_path, val_path, test_path):
         self.load_data(train_path, val_path)
@@ -362,33 +276,3 @@ class XGBoostMultiOutput:
         # Choose the best model based on a specific metric (e.g., validation RMSE)
         best_model_config = min(results, key=lambda k: results[k]['test_rmse'])
         print(f"\nBest Model based on Validation RMSE: {best_model_config}")
-
-        # Load the best model's parameter for further analysis or deployment
-        best_params_path = os.path.join(self.save_dir, best_model_config, "params.json")
-        with open(best_params_path, 'r') as f:
-            best_params = json.load(f)
-
-        # # Retrain the best model on the FULL training data
-        # best_models = []
-        # for i in range(y_train.shape[1]):
-        #     eval_set = [(X_train, y_train.iloc[:, i]), (X_val, y_val.iloc[:, i])]
-        #     model = xgb.XGBRegressor(**best_params, eval_set=eval_set, eval_metric='rmse', verbose=False)
-        #     model.fit(X_train, y_train.iloc[:, i])
-        #     best_models.append(model)
-
-        # Additional Visualizations
-        self.plot_learning_curve(best_model_config)
-        # self.plot_feature_importances(best_models[0], X_train)
-        # self.plot_residuals(best_models[0], X_val, y_val)
-        # self.plot_predicted_vs_actual(best_models[0], X_val, y_val)
-        #
-        # # Save the model
-        # self.save_model(best_models[0], "XGBoost_final_model/model.pkl")
-        # self.save_best_params("XGBoost_final_model/params.json")
-        #
-        # # Advanced Visualizations (Use the first estimator as an example)
-        # try:
-        #     self.plot_pdp(best_models[0], X_val, feature="your_feature_name")
-        #     self.plot_shap_summary(best_models[0], X_val)
-        # except NameError:
-        #     print("Skipping advanced visualizations (PDP and SHAP). Install pdpbox and shap for these plots.")
