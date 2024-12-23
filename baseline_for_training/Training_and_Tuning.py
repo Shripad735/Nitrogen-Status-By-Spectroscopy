@@ -27,12 +27,15 @@ def createHyperParametersCombinations(param_grid):
      
     # This function creates hyper parameter combination - easier to loop on.
     values = param_grid.values()
+    hyper_parameters_names = param_grid.keys()
     param_combos = {}
     combinations = list(product(*values))
 
     for i,comb in tqdm(enumerate(combinations), total=len(combinations),
                        desc='Creating Hyperparameter Combinations'):
-        param_combos[f'combination_{i}'] = comb
+        
+        hyper_param = dict(zip(hyper_parameters_names,comb))
+        param_combos[f'Combination_{i}'] = hyper_param
     
     return param_combos
 
@@ -69,12 +72,12 @@ def tuningLoop(model_obj,params,PLSR_Tuning):
              # hyperparams is a dictionary
              # combination is the number of the combination
              if model_obj.is_multi_output:
-                 model_obj.model.estimator.set_params(*hyperparams)
+                 model_obj.model.estimator.set_params(**hyperparams)
              else:
-                  model_obj.model.set_params(*hyperparams)
-             rmse = model.validate()
+                  model_obj.model.set_params(**hyperparams)
+             rmse = model_obj.validate()
 
-             if model.is_multi_output:
+             if model_obj.is_multi_output:
                 n_value_rmse,sc_value_rmse, st_value_rmse = rmse
                 avg_rmse = np.mean(rmse)
                 # Mainly For plotting
