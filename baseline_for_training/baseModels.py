@@ -1,23 +1,8 @@
+import numpy as np
+
 from Dataset import Dataset
 
-from sklearn.metrics import root_mean_squared_error
-
-# Models
-from sklearn.ensemble import RandomForestRegressor
-from xgboost import XGBRegressor
-from sklearn.cross_decomposition import PLSRegression
-from sklearn.multioutput import MultiOutputRegressor
-
-
-from constants_config import TARGET_VARIABLES
-
-train_file_name = 'train_data.parquet'
-validation_file_name = 'validation_data.parquet'
-test_file_name = 'test_data.parquet'
-
-
-dataset = Dataset(train_file_name,validation_file_name,test_file_name)
-
+from sklearn.metrics import mean_squared_error
 
 class BaseModel:
 
@@ -38,10 +23,10 @@ class BaseModel:
         """
         
         if self.is_multi_output:
-            n_value_rmse,sc_value_rmse,st_value_rmse = root_mean_squared_error(y_true=Y,y_pred=Y_hat, multioutput='raw_values')
+            n_value_rmse,sc_value_rmse,st_value_rmse = np.sqrt(mean_squared_error(y_true=Y,y_pred=Y_hat, multioutput='raw_values'))
             return n_value_rmse, sc_value_rmse, st_value_rmse
         
-        return root_mean_squared_error(y_true=Y,y_pred=Y_hat)
+        return np.sqrt(mean_squared_error(y_true=Y,y_pred=Y_hat))
 
 
     def CrossValidate(self,x_train,y_train,x_val,y_val):
@@ -73,36 +58,6 @@ class BaseModel:
         return self.computeRMSE(self.dataset.Y_test,y_hat)
 
 
-
-# Make sklearn models inherit base model class
-class XGBoostModel(BaseModel):
-    def __init__(self, dataset,param_grid=None, is_multi_output=False):
-
-        if is_multi_output:
-            model = MultiOutputRegressor(XGBRegressor())
-        else:
-            model = XGBRegressor()
-
-        super().__init__(dataset,model,param_grid, is_multi_output)
-
-class RandomForestModel(BaseModel):
-    def __init__(self, dataset,param_grid=None, is_multi_output=False):
-
-        if is_multi_output:
-            model = MultiOutputRegressor(RandomForestRegressor())
-        else:
-            model = RandomForestRegressor()
-
-        super().__init__(dataset,model,param_grid, is_multi_output)
-
-class PLSRModel(BaseModel):
-    def __init__(self, dataset,param_grid=None, is_multi_output=False):
-
-        if is_multi_output:
-            model = MultiOutputRegressor(PLSRegression())
-        else:
-            model = PLSRegression()
-        super().__init__(dataset, model, param_grid, is_multi_output)
 
 
 
