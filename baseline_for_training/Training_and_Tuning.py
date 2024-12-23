@@ -8,18 +8,17 @@ from tqdm import tqdm
 import numpy as np
 
 
-def trainingInit(model_obj,target_variable_name=None):
+def trainingInit(model_obj):
     
         """
         model_obj: a baseModel Object (can be PLSR, XGBoost and RandomForest)
-        target_variable_name: the name of the target_variable (if not using multioutput.)
         """
 
-        if model_obj.is_multi_output and target_variable_name is None:
+        if model_obj.is_multi_output and model_obj.target_variable_name is None:
             rmse_results = {target_var: [] for target_var in TARGET_VARIABLES}
             rmse_results['Avg_RMSE'] = []
         else:
-            rmse_results = {target_variable_name: []}
+            rmse_results = {model_obj.target_variable_name: []}
         
         return rmse_results
 
@@ -39,8 +38,8 @@ def createHyperParametersCombinations(param_grid):
 
 
 
-def tuningLoop(model_obj,target_variable_name,params,PLSR_Tuning):
-     rmse_results = trainingInit(model_obj, target_variable_name)
+def tuningLoop(model_obj,params,PLSR_Tuning):
+     rmse_results = trainingInit(model_obj)
      if model_obj.is_multi_output:
             n_value, sc_value, st_value = TARGET_VARIABLES
 
@@ -61,8 +60,8 @@ def tuningLoop(model_obj,target_variable_name,params,PLSR_Tuning):
                  rmse_results[st_value] += [st_value_rmse]
                  # For choosing the best hyper parameters
                  rmse_results['Avg_RMSE'] += [(model_obj.model.estimator.get_params(),avg_rmse)]
-        else:
-            rmse_results[target_variable_name] = (model_obj.model.get_params(),rmse)
+            else:
+                rmse_results[model_obj.target_variable_name] += [(model_obj.model.get_params(),rmse)]
 
      else:
         
@@ -86,12 +85,12 @@ def tuningLoop(model_obj,target_variable_name,params,PLSR_Tuning):
                 rmse_results['Avg_RMSE'] += [(model_obj.model.estimator.get_params(),avg_rmse)]
 
              else:
-                 rmse_results[target_variable_name] = (model_obj.model.get_params(),rmse)
+                 rmse_results[model_obj.target_variable_name] += [(model_obj.model.get_params(),rmse)]
      return rmse_results
              
                 
 # Use this function for tuning your model's hyper parameters.         
-def hyperParameterTuning(model_obj,target_variable_name=None, PLSR_Tuning = False):
+def hyperParameterTuning(model_obj, PLSR_Tuning = False):
     """
     model: a baseModel Object (can be PLSR, XGBoost and RandomForest)
     target_variable_name: the name of the target_variable (if not using multioutput.)
@@ -104,7 +103,7 @@ def hyperParameterTuning(model_obj,target_variable_name=None, PLSR_Tuning = Fals
           # For PLSR dont create - only one hyperparameter
           params = model_obj.param_grid['n_components']
     
-    rmse_results  = tuningLoop(model_obj,target_variable_name,params,PLSR_Tuning)
+    rmse_results  = tuningLoop(model_obj,params,PLSR_Tuning)
 
     return rmse_results
 
@@ -113,28 +112,26 @@ def hyperParameterTuning(model_obj,target_variable_name=None, PLSR_Tuning = Fals
 
 # Use this function after you've finished optimizing your model!
 
-def CV10(model,target_variable_name=None, n_splits=10):
-        
+def CV10(model_obj , n_splits=10):
         """
         model: a baseModel Object (can be PLSR, XGBoost and RandomForest) - With the best Hyper Parameters.
-        target_variable_name: the name of the target_variable (if not using multioutput.)
         """
 
         kf = KFold(n_splits=n_splits, shuffle=True, random_state=42)
         
-        rmse_results = trainingInit(model, target_variable_name)
+        rmse_results = trainingInit(model_obj)
 
-        if model.is_multi_output:
+        if model_obj.is_multi_output:
             n_value, sc_value, st_value = TARGET_VARIABLES
 
-        for train_index, val_index in tqdm(kf.split(model.dataset.X_train), total=n_splits, desc='Cross Validation'):
+        for train_index, val_index in tqdm(kf.split(model_obj.dataset.X_train), total=n_splits, desc='Cross Validation'):
 
-            X_train_fold, X_val_fold = model.dataset.X_train.iloc[train_index], model.dataset.X_train.iloc[val_index]
-            y_train_fold, y_val_fold = model.dataset.Y_train.iloc[train_index], model.dataset.Y_train.iloc[val_index]
+            X_train_fold, X_val_fold = model_obj.dataset.X_train.iloc[train_index], model_obj.dataset.X_train.iloc[val_index]
+            y_train_fold, y_val_fold = model_obj.dataset.Y_train.iloc[train_index], model_obj.dataset.Y_train.iloc[val_index]
 
-            rmses = model.CrossValidate(X_train_fold,y_train_fold, X_val_fold, y_val_fold)
+            rmses = model_obj.CrossValidate(X_train_fold,y_train_fold, X_val_fold, y_val_fold)
 
-            if model.is_multi_output:
+            if model_obj.is_multi_output:
                 n_rmse,sc_rmse,st_rmse = rmses
                 rmse_results[n_value] += [n_rmse]
                 rmse_results[sc_value] += [sc_rmse]
@@ -142,7 +139,7 @@ def CV10(model,target_variable_name=None, n_splits=10):
                 rmse_results['Avg_RMSE'] += [np.mean(rmses)]
             else:
                 dependent_feature_rmse = rmses 
-                rmse_results[target_variable_name] += [dependent_feature_rmse]
+                rmse_results[model_obj.target_variable_name] += [dependent_feature_rmse]
         
         return rmse_results 
 

@@ -7,11 +7,11 @@ from sklearn.multioutput import MultiOutputRegressor
 
 class PLSRModel(BaseModel):
 
-    def __init__(self, dataset,param_grid=None, is_multi_output=False):
+    def __init__(self, dataset,param_grid=None, is_multi_output=False,target_variable_name=None):
         if is_multi_output:
             model = MultiOutputRegressor(PLSRegression())
         else:
             model = PLSRegression()
-        super().__init__(dataset, model, param_grid, is_multi_output)
+        super().__init__(dataset, model, param_grid, is_multi_output,target_variable_name)
         
    

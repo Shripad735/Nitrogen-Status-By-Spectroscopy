@@ -6,9 +6,16 @@ from sklearn.metrics import mean_squared_error
 
 class BaseModel:
 
-    def __init__(self,dataset,model,param_grid, is_multi_output=False):
-
+    def __init__(self,dataset,model,param_grid, is_multi_output=False, target_variable_name = None):
+        
         self.dataset = dataset
+        self.target_variable_name = target_variable_name
+
+        if self.target_variable_name:
+            self.dataset.Y_train = self.dataset.Y_train[self.target_variable_name]
+            self.dataset.Y_val = self.dataset.Y_val[self.target_variable_name]
+            self.dataset.Y_test = self.dataset.Y_test[self.target_variable_name]
+
         self.model = model
         self.is_multi_output = is_multi_output
         self.param_grid = param_grid
