@@ -1,7 +1,8 @@
 import os
 import pandas as pd
-
-from constants_config import DATA_FOLDER, TARGET_VARIABLES, NON_FEATURE_COLUMNS
+import sys
+sys.path.append('../')
+from constants_config import DATA_FOLDER_PATH, TARGET_VARIABLES, NON_FEATURE_COLUMNS
 
 
 class Dataset:
@@ -11,8 +12,8 @@ class Dataset:
         self.ID_test, self.X_test, self.Y_test = self.splitDependentAndIndependent(test_file_name)
 
     def splitDependentAndIndependent(self, data_file_name):
-        data = pd.read_parquet(os.path.join(DATA_FOLDER, data_file_name))
+        data = pd.read_parquet(os.path.join(DATA_FOLDER_PATH, data_file_name))
         id = data['ID']
-        X = data.drop(NON_FEATURE_COLUMNS)
+        X = data.drop(columns=NON_FEATURE_COLUMNS)
         Y = data[TARGET_VARIABLES]
         return id, X, Y

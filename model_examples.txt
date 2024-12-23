@@ -1,0 +1,37 @@
+Make sklearn models inherit base model class
+
+Example for XGBoostModel:
+# class XGBoostModel(BaseModel):
+#     def __init__(self, dataset,param_grid=None, is_multi_output=False):
+
+#         if is_multi_output:
+#             model = MultiOutputRegressor(xgb.XGBRegressor())
+#         else:
+#             model = xgb.XGBRegressor()
+
+#         super().__init__(dataset,model,param_grid, is_multi_output)
+
+Example for RandomForestModel:
+
+# class RandomForestModel(BaseModel):
+#     def __init__(self, dataset,param_grid=None, is_multi_output=False):
+
+#         if is_multi_output:
+#             model = MultiOutputRegressor(RandomForestRegressor())
+#         else:
+#             model = RandomForestRegressor()
+
+#         super().__init__(dataset,model,param_grid, is_multi_output)
+
+
+Example for PLSR Model:
+
+# class PLSRModel(BaseModel):
+#     def __init__(self, dataset,param_grid=None, is_multi_output=False):
+
+#         if is_multi_output:
+#             model = MultiOutputRegressor(PLSRegression())
+#         else:
+#             model = PLSRegression()
+#         super().__init__(dataset, model, param_grid, is_multi_output)
+
