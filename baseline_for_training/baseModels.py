@@ -8,7 +8,7 @@ class BaseModel:
 
     def __init__(self,dataset,model,param_grid, is_multi_output=False, target_variable_name = None):
         
-        self.dataset = dataset
+        self.dataset = dataset.copy()
         self.target_variable_name = target_variable_name
 
         if self.target_variable_name:

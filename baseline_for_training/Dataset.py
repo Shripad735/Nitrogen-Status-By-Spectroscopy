@@ -1,6 +1,7 @@
 import os
 import pandas as pd
 import sys
+import copy
 sys.path.append('../')
 from constants_config import DATA_FOLDER_PATH, TARGET_VARIABLES, NON_FEATURE_COLUMNS
 
@@ -17,3 +18,8 @@ class Dataset:
         X = data.drop(columns=NON_FEATURE_COLUMNS)
         Y = data[TARGET_VARIABLES]
         return id, X, Y
+    
+    def copy(self,deep=False):
+        if deep:
+            return copy.deepcopy(self)
+        return copy.copy(self)
