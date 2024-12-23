@@ -26,6 +26,8 @@ class CropPart(str, Enum):
 TARGET_VARIABLES = [ColumnName.n_value.value, ColumnName.sc_value.value, ColumnName.st_value.value]
 NON_FEATURE_COLUMNS = [ColumnName.id.value] + TARGET_VARIABLES
 TARGET_VARIABLES_WITH_MEAN = TARGET_VARIABLES + ['mean']
+MUTLI = 'Multi'
+TARGET_VARIABLES_WITH_MULTI = TARGET_VARIABLES + [MUTLI]
 FIGURE_FOLDER_PATH = 'figures'
 DATA_FOLDER_PATH = '../datasets'
 DATA_FOLDER = 'datasets'
@@ -34,5 +36,5 @@ COLOR_PALETTE = {
     'N_Value': ('#ADD8E6', '#E0FFFF'),  # light blue, very light blue
     'SC_Value': ('#90EE90', '#D3FFD3'),  # light green, very light green
     'ST_Value': ('#FFA07A', '#FFDAB9'),  # light orange, very light orange
-    'mean': ('#EE82EE', '#DDA0DD')  # light purple, very light purple
+    'Multi': ('#EE82EE', '#DDA0DD')  # light purple, very light purple
 }
