@@ -52,7 +52,7 @@ class BaseModel:
         Can be used for Hyperparameter Tuning.
         """
         self.model.fit(self.dataset.X_train,self.dataset.Y_train)
-        y_hat = self.model.predict(self.dataset.X_val)
+        y_hat = self.model.predict(self.dataset.X_val).squeeze()
         
         return  self.computeRMSE(self.dataset.Y_val, y_hat)
     
@@ -60,7 +60,7 @@ class BaseModel:
         """
         Use this for testing only! (After training the model using CV10)
         """
-        y_hat = self.model.predict(self.dataset.X_test)
+        y_hat = self.model.predict(self.dataset.X_test).squeeze()
 
         return self.computeRMSE(self.dataset.Y_test,y_hat)
 
