@@ -71,6 +71,7 @@ def tuningLoop(model_obj,params,PLSR_Tuning):
         for hyperparams in tqdm(params.values(), desc='Tuning Hyperparameters', total=len(params)):
              # hyperparams is a dictionary
              # combination is the number of the combination
+             print(f'HyperParameters:{hyperparams}')
              if model_obj.is_multi_output:
                  model_obj.model.estimator.set_params(**hyperparams)
              else:
