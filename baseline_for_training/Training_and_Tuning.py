@@ -1,6 +1,5 @@
  
 from itertools import product
-from pyexpat import model
 from sklearn.model_selection import KFold
 from constants_config import TARGET_VARIABLES
 from tqdm import tqdm
@@ -92,7 +91,8 @@ def tuningLoop(model_obj,params,PLSR_Tuning):
                  rmse_results[model_obj.target_variable_name] += [(model_obj.model.get_params(),rmse)]
      return rmse_results
              
-                
+
+
 # Use this function for tuning your model's hyper parameters.         
 def hyperParameterTuning(model_obj, PLSR_Tuning = False):
     """
@@ -113,9 +113,7 @@ def hyperParameterTuning(model_obj, PLSR_Tuning = False):
 
 
 
-
 # Use this function after you've finished optimizing your model!
-
 def CV10(model_obj , n_splits=10):
         """
         model: a baseModel Object (can be PLSR, XGBoost and RandomForest) - With the best Hyper Parameters.
