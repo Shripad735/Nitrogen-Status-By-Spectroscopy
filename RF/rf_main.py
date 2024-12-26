@@ -18,9 +18,9 @@ dataset = Dataset(
 # Initialize and run RFModel
 rf_model = RFModel(dataset, param_grid)
 results = {
-                'best_params': self.best_params,
-                'cv_avg_rmse': self.cv_avg_rmse,
-                'test_rmse': self.test_rmse
+                'best_params': rf_model.best_params,
+                'cv_avg_rmse': rf_model.cv_avg_rmse,
+                'test_rmse': rf_model.test_rmse
             }
 
 print("Model training and evaluation complete.")

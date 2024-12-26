@@ -1,5 +1,6 @@
 import numpy as np
 from sklearn.ensemble import RandomForestRegressor
+from sklearn.multioutput import MultiOutputRegressor
 from baseline_for_training.Dataset import Dataset
 from baseline_for_training.baseModels import BaseModel
 from baseline_for_training.Training_and_Tuning import hyperParameterTuning, CV10
@@ -7,8 +8,11 @@ from constants_config import TARGET_VARIABLES
 
 class RFModel(BaseModel):
     def __init__(self, dataset, param_grid, is_multi_output=True, target_variable_name=None):
-        rf_model = RandomForestRegressor(random_state=42)
-        super().__init__(dataset, rf_model, param_grid, is_multi_output, target_variable_name)
+        if is_multi_output:
+            model = MultiOutputRegressor(RandomForestRegressor())
+        else:
+            model = RandomForestRegressor()
+        super().__init__(dataset, model, param_grid, is_multi_output, target_variable_name)
         self.best_params = None
         self.cv_avg_rmse = None
         self.test_rmse = None
