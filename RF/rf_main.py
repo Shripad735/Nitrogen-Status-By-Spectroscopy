@@ -10,18 +10,14 @@ param_grid = {
 
 # Initialize Dataset
 dataset = Dataset(
-    train_file_name='train_data.parquet',
-    validation_file_name='validation_data.parquet',
-    test_file_name='test_data.parquet'
+    train_file_name='train_data_plsr.parquet',
+    validation_file_name='validation_data_plsr.parquet',
+    test_file_name='test_data_plsr.parquet'
     )
 
 # Initialize and run RFModel
 rf_model = RFModel(dataset, param_grid)
-results = {
-                'best_params': rf_model.best_params,
-                'cv_avg_rmse': rf_model.cv_avg_rmse,
-                'test_rmse': rf_model.test_rmse
-            }
+
 
 print("Model training and evaluation complete.")
 print(f"Best Hyperparameters: {results['best_params']}")

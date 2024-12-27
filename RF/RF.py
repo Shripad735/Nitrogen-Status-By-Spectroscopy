@@ -14,7 +14,7 @@ class RFModel(BaseModel):
             model = RandomForestRegressor()
         super().__init__(dataset, model, param_grid, is_multi_output, target_variable_name)
         self.best_params = None
-        self.cv_avg_rmse = None
+        self.cv_rmse = None
         self.test_rmse = None
 
         self.__run()
@@ -31,21 +31,23 @@ class RFModel(BaseModel):
         pass
 
     def __tune_hyperparameters(self):
-        print("Starting hyperparameter tuning...")
-        tuning_results = hyperParameterTuning(self, PLSR_Tuning=False)
-        self.best_params = min(tuning_results['Avg_RMSE'], key=lambda x: x[1])[0]
-        print(f"Best Parameters: {self.best_params}")
-        self.model.set_params(**self.best_params)
+        # print("Starting hyperparameter tuning...")
+        # tuning_results = hyperParameterTuning(self, PLSR_Tuning=False)
+        # self.best_params = min(tuning_results['Avg_RMSE'], key=lambda x: x[1])[0]
+        # print(f"Best Parameters: {self.best_params}")
+        self.best_params = {'bootstrap': True, 'ccp_alpha': 0.0, 'criterion': 'squared_error', 'max_depth': 20, 'max_features': 1.0, 'max_leaf_nodes': None, 'max_samples': None, 'min_impurity_decrease': 0.0, 'min_samples_leaf': 2, 'min_samples_split': 5, 'min_weight_fraction_leaf': 0.0, 'monotonic_cst': None, 'n_estimators': 100, 'n_jobs': None, 'oob_score': False, 'random_state': None, 'verbose': 0, 'warm_start': False}
+        self.model.estimator.set_params(**self.best_params)
 
     def __cross_validate(self):
         print("Starting cross-validation...")
-        cv_results = CV10(self, n_splits=10)
-        self.cv_avg_rmse = np.mean(cv_results['Avg_RMSE'])
-        print(f"Average RMSE from cross-validation: {self.cv_avg_rmse}")
+        self.cv_rmse = CV10(self, n_splits=10)
+        cv_avg_rmse = np.mean(cv_results['Avg_RMSE'])
+        print(f"Average RMSE from cross-validation: {cv_avg_rmse}")
 
     def __evaluate_model(self):
         print("Evaluating on test set...")
         self.test_rmse = self.evaluate()
+
         print(f"Test RMSE: {self.test_rmse}")
 
 
