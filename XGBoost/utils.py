@@ -4,6 +4,7 @@ import joblib
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from constants_config import TARGET_VARIABLES_WITH_MULTI
 
 from constants_config import COLOR_PALETTE, TARGET_VARIABLES_WITH_MEAN, NON_FEATURE_COLUMNS, TARGET_VARIABLES
 
@@ -13,13 +14,35 @@ def save_best_model_and_params(model, params, train_rmses, val_rmses, directory=
     joblib.dump(model, os.path.join(directory, "model.pkl"))
     with open(os.path.join(directory, "params.json"), "w") as f:
         json.dump(params, f)
+
+    train_rmses_to_save = {key: train_rmses[key] for key in
+                           ['N_Value_mean_folds', 'SC_Value_mean_folds', 'ST_Value_mean_folds']}
+    val_rmses_to_save = {key: val_rmses[key] for key in
+                         ['N_Value_mean_folds', 'SC_Value_mean_folds', 'ST_Value_mean_folds']}
+    final_train_rmses = {'N_Value': train_rmses_to_save['N_Value_mean_folds'],
+                         'SC_Value': train_rmses_to_save['SC_Value_mean_folds'],
+                         'ST_Value': train_rmses_to_save['ST_Value_mean_folds']}
+    final_val_rmses = {'N_Value': val_rmses_to_save['N_Value_mean_folds'],
+                       'SC_Value': val_rmses_to_save['SC_Value_mean_folds'],
+                       'ST_Value': val_rmses_to_save['ST_Value_mean_folds']}
     with open(os.path.join(directory, "train_rmses.json"), "w") as f:
-        json.dump({k: v.tolist() for k, v in train_rmses.items()}, f)
+        json.dump({k: v.tolist() for k, v in final_train_rmses.items()}, f)
     with open(os.path.join(directory, "val_rmses.json"), "w") as f:
-        json.dump({k: v.tolist() for k, v in val_rmses.items()}, f)
+        json.dump({k: v.tolist() for k, v in final_val_rmses.items()}, f)
 
 
+# todo: continue from here - validate it works
 def load_best_model_and_params(directory="XGBoost_final_model"):
+    models = {}
+    for target in TARGET_VARIABLES_WITH_MULTI:
+        model_path = os.path.join(directory, f"{target}_model.pkl")
+        if os.path.exists(model_path):
+            models[target] = joblib.load(model_path)
+
+    multi_model_path = os.path.join(directory, "multi_model.pkl")
+    if os.path.exists(multi_model_path):
+        models['Multi'] = joblib.load(multi_model_path)
+
     model = joblib.load(os.path.join(directory, "model.pkl"))
     with open(os.path.join(directory, "params.json"), "r") as f:
         params = json.load(f)
@@ -44,13 +67,19 @@ def plot_learning_curve(xgb_multi_output, config_name, save_dir):
     os.makedirs(save_dir, exist_ok=True)
 
     plt.figure(figsize=(10, 6))
+    minimal_individual_estimators = float("inf")
+    for var in TARGET_VARIABLES:
+        n_estimators = len(xgb_multi_output.train_rmses[f'{var}_mean_folds'])
+        if n_estimators < minimal_individual_estimators:
+            minimal_individual_estimators = n_estimators
 
-    for var in TARGET_VARIABLES_WITH_MEAN:
-        n_estimators = xgb_multi_output.best_params[var]['n_estimators']
-        x_axis = range(1, n_estimators + 1)
+    n_estimators = min(xgb_multi_output.best_params['n_estimators'], minimal_individual_estimators)
+    x_axis = range(1, n_estimators + 1)
 
-        train_rmse_mean = xgb_multi_output.train_rmses[var][:n_estimators]
-        val_rmse_mean = xgb_multi_output.val_rmses[var][:n_estimators]
+    for var in TARGET_VARIABLES:
+
+        train_rmse_mean = xgb_multi_output.train_rmses[f'{var}_mean_folds'][:n_estimators]
+        val_rmse_mean = xgb_multi_output.val_rmses[f'{var}_mean_folds'][:n_estimators]
 
         train_color, val_color = COLOR_PALETTE.get(var, ('#D3D3D3', '#DCDCDC'))  # default to light gray
 

@@ -11,12 +11,15 @@ def main(train: bool = True):
     parser.add_argument('--train', action='store_true', help="Train a new model")
     args = parser.parse_args()
 
+    # Ensure the directory exists
+    os.makedirs(DATA_FOLDER_PATH, exist_ok=True)
+
     train_path = f"{DATA_FOLDER_PATH}/train_data.parquet"
     val_path = f"{DATA_FOLDER_PATH}/validation_data.parquet"
     test_path = f"{DATA_FOLDER_PATH}/test_data.parquet"
-
-    # Ensure the directory exists
-    os.makedirs(DATA_FOLDER_PATH, exist_ok=True)
+    train_plsr_path = f"{DATA_FOLDER_PATH}/train_data_plsr.parquet"
+    val_plsr_path = f"{DATA_FOLDER_PATH}/validation_data_plsr.parquet"
+    test_plsr_path = f"{DATA_FOLDER_PATH}/test_data_plsr.parquet"
 
     xgb_multi_output = XGBoostMultiOutput()
     if train or args.train:
