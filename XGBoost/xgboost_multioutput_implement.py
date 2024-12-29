@@ -12,8 +12,8 @@ import matplotlib.colors as mcolors
 from sklearn.model_selection import KFold
 from sklearn.metrics import mean_squared_error
 from sklearn.multioutput import MultiOutputRegressor
-from constants_config import TARGET_VARIABLES, NON_FEATURE_COLUMNS, COLOR_PALETTE, MUTLI, TARGET_VARIABLES_WITH_MULTI, \
-    TARGET_VARIABLES_WITH_MULTIS, MODELS
+from constants_config import TARGET_VARIABLES, NON_FEATURE_COLUMNS, COLOR_PALETTE, MULTI, TARGET_VARIABLES_WITH_MULTI, \
+    TARGET_VARIABLES_WITH_MULTIS, MODELS, TARGET_VARIABLES_WITH_MEAN, MEAN
 
 
 class XGBoostMultiOutput:
@@ -80,22 +80,22 @@ class XGBoostMultiOutput:
 
         return model, np.mean(multi_rmses), multi_rmses.tolist()
 
-    def save_configurations(self):
+    def save_configurations(self, model_name, best_params):
         """Save the best configurations (parameters) and their corresponding models."""
         print("Saving best configurations...")
-        saved_configs = {}
+        # saved_configs = {}
         print("\nBest Params:")
-        # Track saved configurations and their folder names
-        for target_name, params in self.best_params.items():
-            # Create a unique folder name for the parameters
-            params_tuple = tuple(sorted(params.items()))
-            print(f"{target_name}: {params}")
-            folder_name = f"{target_name}_model"
-            saved_configs[params_tuple] = folder_name  # Store the folder name
-            model_folder = os.path.join(self.save_dir, folder_name)
-            os.makedirs(model_folder, exist_ok=True)
-            with open(os.path.join(model_folder, "params.json"), "w") as f:
-                json.dump(params, f)
+        # # Track saved configurations and their folder names
+        # for target_name, params in self.best_params.items():
+        # Create a unique folder name for the parameters
+        # params_tuple = tuple(sorted(params.items()))
+        # print(f"{target_name}: {params}")
+        folder_name = f"{model_name}_model"
+        # saved_configs[params_tuple] = folder_name  # Store the folder name
+        model_folder = os.path.join(self.save_dir, folder_name)
+        os.makedirs(model_folder, exist_ok=True)
+        with open(os.path.join(model_folder, "params.json"), "w") as f:
+            json.dump(best_params, f)
 
     def save_model(self, model, target_name, filename):
         joblib.dump(model, os.path.join(self.save_dir, target_name, filename))
@@ -104,55 +104,35 @@ class XGBoostMultiOutput:
         with open(os.path.join(self.save_dir, filename), "w") as f:
             json.dump(self.best_params, f)
 
-    def plot_chosen_configurations_rmse(self, best_rmses, best_multi_rmses):
+    def plot_chosen_configurations_rmse(self, best_targets_rmses, best_multi_rmse):
         """Bar plot of RMSE scores for the chosen configuration."""
-        labels = TARGET_VARIABLES_WITH_MULTI
-        rmse_values = [best_rmses[target] for target in labels]
-        multi_rmse_values = [best_multi_rmses.get(target, 0) for target in TARGET_VARIABLES]
-
-        # Create interleaved labels and values
-        interleaved_labels = []
-        interleaved_rmse_values = []
-        interleaved_multi_rmse_values = []
-
-        for label, rmse, multi_rmse in zip(labels, rmse_values, multi_rmse_values):
-            interleaved_labels.append(f"{label}_individual")
-            interleaved_labels.append(f"{label}_multi")
-            interleaved_rmse_values.append(rmse)
-            interleaved_rmse_values.append(0)  # Placeholder for multi RMSE
-            interleaved_multi_rmse_values.append(0)  # Placeholder for individual RMSE
-            interleaved_multi_rmse_values.append(multi_rmse)
+        labels = TARGET_VARIABLES_WITH_MEAN
+        rmse_values = [best_targets_rmses[target] for target in TARGET_VARIABLES] + [best_multi_rmse]
 
         plt.figure(figsize=(12, 6))
-        colors = [COLOR_PALETTE.get(target, '#D3D3D3')[0] for target in labels for _ in range(2)]
-        valid_colors = [color if color != '#' else '#D3D3D3' for color in colors]
-        multi_colors = [mcolors.to_rgba(color, alpha=0.5) for color in valid_colors]
+        colors = [COLOR_PALETTE.get(target, '#D3D3D3')[0] for target in TARGET_VARIABLES] + [
+            COLOR_PALETTE.get(MEAN, '#D3D3D3')[0]]
 
-        bars = plt.bar(interleaved_labels, interleaved_rmse_values, color=valid_colors)
-        multi_bars = plt.bar(interleaved_labels, interleaved_multi_rmse_values, color=multi_colors)
+        # Validate and convert colors
+        valid_colors = []
+        for color in colors:
+            try:
+                valid_colors.append(mcolors.to_rgba(color))
+            except (ValueError, TypeError):
+                valid_colors.append(mcolors.to_rgba('#D3D3D3'))
+
+        bars = plt.bar(labels, rmse_values, color=valid_colors)
 
         # Add RMSE scores on top of each bar
-        for bar, rmse in zip(bars, interleaved_rmse_values):
-            if rmse > 0:
-                yval = bar.get_height()
-                plt.text(bar.get_x() + bar.get_width() / 2, yval, round(rmse, 2), va='bottom', ha='center')
+        for bar, rmse in zip(bars, rmse_values):
+            yval = bar.get_height()
+            plt.text(bar.get_x() + bar.get_width() / 2, yval, round(rmse, 2), va='bottom', ha='center')
 
-        for bar, rmse in zip(multi_bars, interleaved_multi_rmse_values):
-            if rmse > 0:
-                yval = bar.get_height()
-                plt.text(bar.get_x() + bar.get_width() / 2, yval, round(rmse, 2), va='bottom', ha='center')
-
-        # Manually add legend entries for each target variable, excluding 'multi'
+        # Manually add legend entries for each target variable, including 'multi'
         legend_handles = []
-        for target in labels:
-            if target != MUTLI:
-                individual_patch = plt.Line2D([0], [0], color=COLOR_PALETTE.get(target, '#D3D3D3')[0], lw=4,
-                                              label=f'{target} Individual RMSE')
-                multi_patch = plt.Line2D([0], [0],
-                                         color=mcolors.to_rgba(COLOR_PALETTE.get(target, '#D3D3D3')[0], alpha=0.5),
-                                         lw=4,
-                                         label=f'{target} Multi RMSE')
-                legend_handles.extend([individual_patch, multi_patch])
+        for target, color in zip(labels, valid_colors):
+            individual_patch = plt.Line2D([0], [0], color=color, lw=4, label=f'{target} RMSE')
+            legend_handles.append(individual_patch)
 
         plt.legend(handles=legend_handles)
 
@@ -163,40 +143,34 @@ class XGBoostMultiOutput:
         plt.savefig(os.path.join(self.save_figure_dir, "chosen_configurations_rmse.png"))
         plt.show()
 
-    def find_best_configuration_based_rmse_score(self, X_train, y_train, X_val, y_val):
+    def find_best_configuration_based_rmse_score(self, X_train, y_train, X_val, y_val, model_name):
         # find the best hyperparameters for each target variable and the mean
         param_grid = self.get_param_grid()
 
         # Initialize the best RMSE and parameters storage
-        best_rmses = {target: float("inf") for target in TARGET_VARIABLES_WITH_MULTI}
-        best_params = {target: None for target in TARGET_VARIABLES_WITH_MULTI}
-        best_models = {target: None for target in TARGET_VARIABLES_WITH_MULTI}
-        best_multi_rmses = {target: None for target in TARGET_VARIABLES}
+        minimal_rmse = float("inf")
+        best_params = {}
+        model = {}
+        best_targets_rmses = {target: None for target in TARGET_VARIABLES}
 
         # Hyperparameter tuning loop
         for params in tqdm(param_grid, desc="Hyperparameter tuning"):
-            model, multi_rmse, multi_rmses = self.train_and_evaluate_by_rmse_per_configuration(
+            evaluated_model, rmse, multi_targets_rmses = self.train_and_evaluate_by_rmse_per_configuration(
                 params, X_train, y_train, X_val, y_val)
-            # # Update best RMSEs and models for each target and mean
-            # for i, target in enumerate(TARGET_VARIABLES):
-            #     if rmses[i] < best_rmses[target]:
-            #         best_rmses[target] = rmses[i]
-            #         best_params[target] = params
-            #         best_models[target] = models[i]  # Store the individual model
 
             # Update for multi-output model
-            if multi_rmse < best_rmses[MUTLI]:
-                best_rmses[MUTLI] = multi_rmse
-                best_params[MUTLI] = params
-                best_models[MUTLI] = model  # Store the multi-output model
-                best_multi_rmses = {target: multi_rmses[i] for i, target in enumerate(TARGET_VARIABLES)}
+            if rmse < minimal_rmse:
+                minimal_rmse = rmse
+                best_params = params
+                model = evaluated_model  # Store the multi-output model
+                best_targets_rmses = {target: multi_targets_rmses[i] for i, target in enumerate(TARGET_VARIABLES)}
 
         self.best_params = best_params
-        self.model = best_models  # Store the best models dictionary
-        self.plot_chosen_configurations_rmse(best_rmses, best_multi_rmses)
-        self.save_configurations()
+        self.model = model  # Store the best models dictionary
+        self.plot_chosen_configurations_rmse(best_targets_rmses, minimal_rmse)
+        self.save_configurations(model_name, best_params)
 
-        return best_rmses, best_params, best_multi_rmses
+        return best_targets_rmses, best_params, minimal_rmse
 
     def k_fold_cross_validate_model(self, X_train, y_train, model_name, params):
         """Performs k-fold cross-validation and evaluation on the validation and test sets."""
@@ -207,7 +181,7 @@ class XGBoostMultiOutput:
         fold_val_rmses = {key: [] for key in TARGET_VARIABLES}
 
         # Train multi-output model
-        multi_model_params = params[MUTLI]
+        multi_model_params = params[MULTI]
         for train_index, val_index in tqdm(kf.split(X_train), desc="Cross-validation for Multi", disable=False):
             X_train_fold, X_val_fold = X_train.iloc[train_index], X_train.iloc[val_index]
             y_train_fold, y_val_fold = y_train.iloc[train_index], y_train.iloc[val_index]
@@ -234,6 +208,7 @@ class XGBoostMultiOutput:
                 )
 
         # Save the multi-output model
+        # todo - No such file or directory: 'models/model name/model name.pkl'
         self.save_model(model, model_name, os.path.join(f"{model_name}.pkl"))
 
         # Store the RMSEs for each target
@@ -242,7 +217,7 @@ class XGBoostMultiOutput:
 
     def evaluate_models_on_validation_sets(self, target, X_val, y_val, model):
         """Evaluates the model on the validation set."""
-        if target != MUTLI:
+        if target != MULTI:
             y_pred_val = model.predict(X_val)
             val_rmse_individual = np.sqrt(mean_squared_error(y_val[target], y_pred_val))
             self.val_rmses[target] = val_rmse_individual
@@ -251,11 +226,11 @@ class XGBoostMultiOutput:
             y_pred_val_multi = model.predict(X_val)
             val_rmse_multi_individuals = np.sqrt(mean_squared_error(y_val, y_pred_val_multi, multioutput='raw_values'))
             for i, target in enumerate(TARGET_VARIABLES):
-                self.val_rmses[f'{MUTLI}_{target}'] = val_rmse_multi_individuals[i]
+                self.val_rmses[f'{MULTI}_{target}'] = val_rmse_multi_individuals[i]
                 print(f"Validation RMSE for multi-output model {target}: {val_rmse_multi_individuals[i]:.4f}")
 
             val_rmse_multi = np.mean(np.sqrt(mean_squared_error(y_val, y_pred_val_multi, multioutput='raw_values')))
-            self.val_rmses[MUTLI] = val_rmse_multi
+            self.val_rmses[MULTI] = val_rmse_multi
             print(f"Validation RMSE for multi-output model (average): {val_rmse_multi:.4f}")
 
     def get_best_model(self) -> str:
@@ -265,11 +240,11 @@ class XGBoostMultiOutput:
         best_model = ''
         mean_individual_rmses = np.mean([self.val_rmses[target] for target in TARGET_VARIABLES])
         print(f"Mean RMSE for individual models: {mean_individual_rmses:.4f}")
-        print(f"Mean RMSE for multi-output model: {self.val_rmses[MUTLI]:.4f}")
+        print(f"Mean RMSE for multi-output model: {self.val_rmses[MULTI]:.4f}")
         os.makedirs('XGBoost_final_model', exist_ok=True)
 
-        if self.val_rmses[MUTLI] <= mean_individual_rmses:
-            best_model = MUTLI
+        if self.val_rmses[MULTI] <= mean_individual_rmses:
+            best_model = MULTI
             self.model = self.model[best_model]
             self.best_params = self.best_params[best_model]
             print("Individual models have higher average RMSE. Saving the multi-output model.")
@@ -288,7 +263,7 @@ class XGBoostMultiOutput:
         y_pred_test = np.zeros((len(test_data), len(TARGET_VARIABLES)))
 
         individual_rmses = []
-        if best_model == MUTLI:
+        if best_model == MULTI:
             y_pred_test = self.model.predict(X_test)
             test_rmse_multi_individuals = np.sqrt(mean_squared_error(y_test, y_pred_test, multioutput='raw_values'))
             for i, target in enumerate(TARGET_VARIABLES):
@@ -306,7 +281,7 @@ class XGBoostMultiOutput:
             avg_test_rmse_individual = np.mean(individual_rmses)
             print(f"Average Test RMSE for individual models: {avg_test_rmse_individual:.4f}")
 
-    def run(self, train_path, val_path, test_path):
+    def run(self, train_path, val_path, test_path, model_name):
         # Load the data
         self.load_data(train_path, val_path, test_path)
         X_train, y_train = self.preprocess_data(dataset="train")
@@ -315,14 +290,14 @@ class XGBoostMultiOutput:
 
         print("Finding best configurations...")
         best_rmses, best_params, best_multi_rmses = self.find_best_configuration_based_rmse_score(
-            X_train, y_train, X_val, y_val)
+            X_train, y_train, X_val, y_val, model_name)
         print("\nBest RMSEs:")
         for key, value in best_rmses.items():
-            if key != MUTLI:
-                print(f"{key}: {value}")
-                if key in best_multi_rmses:
-                    print(f"{key} Multi: {best_multi_rmses[key]}")
+            print(f"{key}: {value}")
 
+        print(f"{MEAN}: {best_multi_rmses}")
+
+        # todo - continue from here the
         # for each variable do the K-fold cross-validate and evaluate on the validation and test sets
         params = {}
         for target in TARGET_VARIABLES_WITH_MULTI:

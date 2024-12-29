@@ -1,6 +1,6 @@
 import os
 import argparse
-from constants_config import DATA_FOLDER_PATH, FIGURE_FOLDER_PATH
+from constants_config import DATA_FOLDER_PATH, FIGURE_FOLDER_PATH, MULTI
 from XGBoost.xgboost_multioutput_implement import XGBoostMultiOutput
 from utils import save_best_model_and_params, load_best_model_and_params, plot_learning_curve, \
     plot_feature_importances, plot_residuals
@@ -23,7 +23,7 @@ def main(train: bool = True):
 
     xgb_multi_output = XGBoostMultiOutput()
     if train or args.train:
-        xgb_multi_output.run(train_path, val_path, test_path)
+        xgb_multi_output.run(train_path, val_path, test_path, MULTI)
         save_best_model_and_params(xgb_multi_output.model, xgb_multi_output.best_params, xgb_multi_output.train_rmses,
                                    xgb_multi_output.val_rmses, directory="XGBoost_final_model")
     else:
