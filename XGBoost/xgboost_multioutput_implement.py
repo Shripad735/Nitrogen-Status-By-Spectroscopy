@@ -1,30 +1,23 @@
 import os
-import json
-import shutil
 import joblib
 import itertools
 import numpy as np
 import pandas as pd
 import xgboost as xgb
 from tqdm import tqdm
-import matplotlib.pyplot as plt
-import matplotlib.colors as mcolors
 from sklearn.model_selection import KFold
 from sklearn.metrics import mean_squared_error
 from sklearn.multioutput import MultiOutputRegressor
-from constants_config import TARGET_VARIABLES, NON_FEATURE_COLUMNS, COLOR_PALETTE, MULTI, TARGET_VARIABLES_WITH_MULTI, \
-    TARGET_VARIABLES_WITH_MULTIS, MODELS, TARGET_VARIABLES_WITH_MEAN, MEAN
+from constants_config import TARGET_VARIABLES, NON_FEATURE_COLUMNS, MEAN
 
 
 class XGBoostMultiOutput:
-    def __init__(self, n_splits=2, save_dir='models/', save_figure_dir='figures/'):
+    def __init__(self, model_name, n_splits=2, save_dir='models/', save_figure_dir='figures/'):
+        self.model_name = model_name
         self.data = None
-        # self.train_data = None
-        # self.train_data_plsr = None
-        # self.val_data = None
-        # self.val_data_plsr = None
-        # self.test_data = None
-        # self.test_data_plsr = None
+        self.train_data = None
+        self.val_data = None
+        self.test_data = None
         self.n_splits = n_splits
         self.save_dir = save_dir
         os.makedirs(self.save_dir, exist_ok=True)
@@ -34,6 +27,21 @@ class XGBoostMultiOutput:
         self.best_params = None
         self.train_rmses = {}
         self.val_rmses = {}
+        self.evaluated_val_rmses = {}
+        self.evaluated_test_rmses = {}
+        self.targets_rmses_for_best_params = {}
+
+    def get_feature_importances(self):
+        """Aggregate feature importances from all models."""
+        all_importances = []
+        for model in self.model.estimators_:
+            all_importances.append(model.feature_importances_)
+        return np.mean(all_importances, axis=0)
+
+    def get_feature_names(self):
+        """Return feature names from the first estimator."""
+        first_estimator = next(iter(self.model.estimators_))
+        return first_estimator.feature_names_in_
 
     def load_data(self, train_path, val_path, test_path):
         self.train_data = pd.read_parquet(train_path)
@@ -77,71 +85,9 @@ class XGBoostMultiOutput:
 
         # Calculate RMSE for each target variable of the multi_model
         multi_rmses = np.sqrt(mean_squared_error(y_val, y_pred_val, multioutput='raw_values'))
+        mean_rmses = np.mean(multi_rmses)
 
-        return model, np.mean(multi_rmses), multi_rmses.tolist()
-
-    def save_configurations(self, model_name, best_params):
-        """Save the best configurations (parameters) and their corresponding models."""
-        print("Saving best configurations...")
-        # saved_configs = {}
-        print("\nBest Params:")
-        # # Track saved configurations and their folder names
-        # for target_name, params in self.best_params.items():
-        # Create a unique folder name for the parameters
-        # params_tuple = tuple(sorted(params.items()))
-        # print(f"{target_name}: {params}")
-        folder_name = f"{model_name}_model"
-        # saved_configs[params_tuple] = folder_name  # Store the folder name
-        model_folder = os.path.join(self.save_dir, folder_name)
-        os.makedirs(model_folder, exist_ok=True)
-        with open(os.path.join(model_folder, "params.json"), "w") as f:
-            json.dump(best_params, f)
-
-    def save_model(self, model, target_name, filename):
-        joblib.dump(model, os.path.join(self.save_dir, target_name, filename))
-
-    def save_best_params(self, filename):
-        with open(os.path.join(self.save_dir, filename), "w") as f:
-            json.dump(self.best_params, f)
-
-    def plot_chosen_configurations_rmse(self, best_targets_rmses, best_multi_rmse):
-        """Bar plot of RMSE scores for the chosen configuration."""
-        labels = TARGET_VARIABLES_WITH_MEAN
-        rmse_values = [best_targets_rmses[target] for target in TARGET_VARIABLES] + [best_multi_rmse]
-
-        plt.figure(figsize=(12, 6))
-        colors = [COLOR_PALETTE.get(target, '#D3D3D3')[0] for target in TARGET_VARIABLES] + [
-            COLOR_PALETTE.get(MEAN, '#D3D3D3')[0]]
-
-        # Validate and convert colors
-        valid_colors = []
-        for color in colors:
-            try:
-                valid_colors.append(mcolors.to_rgba(color))
-            except (ValueError, TypeError):
-                valid_colors.append(mcolors.to_rgba('#D3D3D3'))
-
-        bars = plt.bar(labels, rmse_values, color=valid_colors)
-
-        # Add RMSE scores on top of each bar
-        for bar, rmse in zip(bars, rmse_values):
-            yval = bar.get_height()
-            plt.text(bar.get_x() + bar.get_width() / 2, yval, round(rmse, 2), va='bottom', ha='center')
-
-        # Manually add legend entries for each target variable, including 'multi'
-        legend_handles = []
-        for target, color in zip(labels, valid_colors):
-            individual_patch = plt.Line2D([0], [0], color=color, lw=4, label=f'{target} RMSE')
-            legend_handles.append(individual_patch)
-
-        plt.legend(handles=legend_handles)
-
-        plt.title("RMSE Scores for Chosen Configurations")
-        plt.xlabel("Target Variable")
-        plt.ylabel("RMSE")
-        plt.tight_layout()
-        plt.savefig(os.path.join(self.save_figure_dir, "chosen_configurations_rmse.png"))
-        plt.show()
+        return mean_rmses, multi_rmses.tolist()
 
     def find_best_configuration_based_rmse_score(self, X_train, y_train, X_val, y_val, model_name):
         # find the best hyperparameters for each target variable and the mean
@@ -150,25 +96,23 @@ class XGBoostMultiOutput:
         # Initialize the best RMSE and parameters storage
         minimal_rmse = float("inf")
         best_params = {}
-        model = {}
         best_targets_rmses = {target: None for target in TARGET_VARIABLES}
 
         # Hyperparameter tuning loop
         for params in tqdm(param_grid, desc="Hyperparameter tuning"):
-            evaluated_model, rmse, multi_targets_rmses = self.train_and_evaluate_by_rmse_per_configuration(
-                params, X_train, y_train, X_val, y_val)
-
+            rmse, multi_targets_rmses = self.train_and_evaluate_by_rmse_per_configuration(params, X_train, y_train,
+                                                                                          X_val, y_val)
             # Update for multi-output model
             if rmse < minimal_rmse:
                 minimal_rmse = rmse
                 best_params = params
-                model = evaluated_model  # Store the multi-output model
                 best_targets_rmses = {target: multi_targets_rmses[i] for i, target in enumerate(TARGET_VARIABLES)}
 
         self.best_params = best_params
-        self.model = model  # Store the best models dictionary
-        self.plot_chosen_configurations_rmse(best_targets_rmses, minimal_rmse)
-        self.save_configurations(model_name, best_params)
+        best_targets_rmses[MEAN] = minimal_rmse
+        self.targets_rmses_for_best_params = best_targets_rmses
+        print(f"\nBest Configurations for {model_name} raised from Hyperparameter tuning:")
+        print(best_params)
 
         return best_targets_rmses, best_params, minimal_rmse
 
@@ -181,14 +125,12 @@ class XGBoostMultiOutput:
         fold_val_rmses = {key: [] for key in TARGET_VARIABLES}
 
         # Train multi-output model
-        multi_model_params = params[MULTI]
+        multi_model_params = params
         for train_index, val_index in tqdm(kf.split(X_train), desc="Cross-validation for Multi", disable=False):
             X_train_fold, X_val_fold = X_train.iloc[train_index], X_train.iloc[val_index]
             y_train_fold, y_val_fold = y_train.iloc[train_index], y_train.iloc[val_index]
 
-            model = MultiOutputRegressor(
-                xgb.XGBRegressor(**multi_model_params, eval_metric='rmse')
-            )
+            model = MultiOutputRegressor(xgb.XGBRegressor(**multi_model_params, eval_metric='rmse'))
 
             # Fit the multi-output model
             model.fit(X_train_fold, y_train_fold)
@@ -200,88 +142,44 @@ class XGBoostMultiOutput:
 
             # Store the RMSEs for each fold
             for i, target in enumerate(y_train.columns):
-                fold_train_rmses[f'{target}'].append(
-                    model.estimators_[i].evals_result()["validation_0"]["rmse"]
-                )
-                fold_val_rmses[f'{target}'].append(
-                    model.estimators_[i].evals_result()["validation_1"]["rmse"]
-                )
+                fold_train_rmses[f'{target}'].append(model.estimators_[i].evals_result()["validation_0"]["rmse"])
+                fold_val_rmses[f'{target}'].append(model.estimators_[i].evals_result()["validation_1"]["rmse"])
 
         # Save the multi-output model
-        # todo - No such file or directory: 'models/model name/model name.pkl'
-        self.save_model(model, model_name, os.path.join(f"{model_name}.pkl"))
+        self.model = model
 
         # Store the RMSEs for each target
-        self.train_rmses = {f'{key}_mean_folds': np.mean(fold_train_rmses[key], axis=0) for key in TARGET_VARIABLES}
-        self.val_rmses = {f'{key}_mean_folds': np.mean(fold_val_rmses[key], axis=0) for key in TARGET_VARIABLES}
+        self.train_rmses = {f'{key}': np.mean(fold_train_rmses[key], axis=0) for key in TARGET_VARIABLES}
+        self.val_rmses = {f'{key}': np.mean(fold_val_rmses[key], axis=0) for key in TARGET_VARIABLES}
 
-    def evaluate_models_on_validation_sets(self, target, X_val, y_val, model):
-        """Evaluates the model on the validation set."""
-        if target != MULTI:
-            y_pred_val = model.predict(X_val)
-            val_rmse_individual = np.sqrt(mean_squared_error(y_val[target], y_pred_val))
-            self.val_rmses[target] = val_rmse_individual
-            print(f"Validation RMSE for {target}: {val_rmse_individual:.4f}")
+    def evaluate_model(self, X, y, model, dataset_type='validation'):
+        """Evaluates the model on the given dataset."""
+        y_pred = model.predict(X)
+        individual_rmses = np.sqrt(mean_squared_error(y, y_pred, multioutput='raw_values'))
+        print(f"\n{dataset_type.capitalize()} RMSEs for {self.model_name}:")
+        for i, target in enumerate(TARGET_VARIABLES):
+            if dataset_type == 'validation':
+                self.evaluated_val_rmses[f'{target}'] = individual_rmses[i]
+            else:
+                self.evaluated_test_rmses[f'{target}'] = individual_rmses[i]
+            print(f"{target}: {individual_rmses[i]:.4f}")
+
+        mean_rmse = np.mean(individual_rmses)
+        if dataset_type == 'validation':
+            self.evaluated_val_rmses[MEAN] = mean_rmse
         else:
-            y_pred_val_multi = model.predict(X_val)
-            val_rmse_multi_individuals = np.sqrt(mean_squared_error(y_val, y_pred_val_multi, multioutput='raw_values'))
-            for i, target in enumerate(TARGET_VARIABLES):
-                self.val_rmses[f'{MULTI}_{target}'] = val_rmse_multi_individuals[i]
-                print(f"Validation RMSE for multi-output model {target}: {val_rmse_multi_individuals[i]:.4f}")
+            self.evaluated_test_rmses[MEAN] = mean_rmse
+        print(f"{MEAN}: {mean_rmse:.4f}")
 
-            val_rmse_multi = np.mean(np.sqrt(mean_squared_error(y_val, y_pred_val_multi, multioutput='raw_values')))
-            self.val_rmses[MULTI] = val_rmse_multi
-            print(f"Validation RMSE for multi-output model (average): {val_rmse_multi:.4f}")
+    def save_model_object(self):
+        print("Saving the model object after evaluation...")
+        directory = os.path.join(self.save_dir, self.model_name)
+        os.makedirs(directory, exist_ok=True)
+        joblib.dump(self, os.path.join(directory, 'model.pkl'))
 
-    def get_best_model(self) -> str:
-        """ get the mean RMSE of all the target variables and compare the mean to the mean RMSE of the multi-output
-        model, if the lower RMSE is the multi-output one than save it in as the best model, else save all 3
-        individuals models in XGBoost_final_model folder"""
-        best_model = ''
-        mean_individual_rmses = np.mean([self.val_rmses[target] for target in TARGET_VARIABLES])
-        print(f"Mean RMSE for individual models: {mean_individual_rmses:.4f}")
-        print(f"Mean RMSE for multi-output model: {self.val_rmses[MULTI]:.4f}")
-        os.makedirs('XGBoost_final_model', exist_ok=True)
+    def run(self, train_path, val_path, test_path):
+        print(f"Running {self.model_name} XGBoostMultiOutput")
 
-        if self.val_rmses[MULTI] <= mean_individual_rmses:
-            best_model = MULTI
-            self.model = self.model[best_model]
-            self.best_params = self.best_params[best_model]
-            print("Individual models have higher average RMSE. Saving the multi-output model.")
-        else:
-            best_model = TARGET_VARIABLES
-            print("Multi-output model has higher average RMSE. Saving the individual models.")
-            self.model = {target: self.model[target] for target in best_model}
-            self.best_params = {target: self.best_params[target] for target in best_model}
-        return best_model
-
-    def evaluate_best_model_on_test_set(self, test_path, best_model):
-        """ get the model from the best model and evaluate it on the test set """
-        test_data = pd.read_parquet(test_path)
-        X_test = test_data.drop(NON_FEATURE_COLUMNS, axis=1)
-        y_test = test_data[TARGET_VARIABLES]
-        y_pred_test = np.zeros((len(test_data), len(TARGET_VARIABLES)))
-
-        individual_rmses = []
-        if best_model == MULTI:
-            y_pred_test = self.model.predict(X_test)
-            test_rmse_multi_individuals = np.sqrt(mean_squared_error(y_test, y_pred_test, multioutput='raw_values'))
-            for i, target in enumerate(TARGET_VARIABLES):
-                print(f"Test RMSE for multi-output model {target}: {test_rmse_multi_individuals[i]:.4f}")
-            test_rmse_multi = np.mean(np.sqrt(mean_squared_error(y_test, y_pred_test, multioutput='raw_values')))
-            print(f"Test RMSE for multi-output model (average): {test_rmse_multi:.4f}")
-        else:
-            for i, target in enumerate(TARGET_VARIABLES):
-                y_pred_test[:, i] = self.model[target].predict(X_test)
-                test_rmse_individual = np.sqrt(mean_squared_error(y_test[target], y_pred_test[:, i]))
-                individual_rmses.append(test_rmse_individual)
-                print(f"Test RMSE for {target}: {test_rmse_individual:.4f}")
-
-            # Calculate the average RMSE for the individual models
-            avg_test_rmse_individual = np.mean(individual_rmses)
-            print(f"Average Test RMSE for individual models: {avg_test_rmse_individual:.4f}")
-
-    def run(self, train_path, val_path, test_path, model_name):
         # Load the data
         self.load_data(train_path, val_path, test_path)
         X_train, y_train = self.preprocess_data(dataset="train")
@@ -290,30 +188,12 @@ class XGBoostMultiOutput:
 
         print("Finding best configurations...")
         best_rmses, best_params, best_multi_rmses = self.find_best_configuration_based_rmse_score(
-            X_train, y_train, X_val, y_val, model_name)
-        print("\nBest RMSEs:")
+            X_train, y_train, X_val, y_val, self.model_name)
+        print("\nMinimal RMSEs based on the chosen configuration:")
         for key, value in best_rmses.items():
             print(f"{key}: {value}")
 
-        print(f"{MEAN}: {best_multi_rmses}")
-
-        # todo - continue from here the
-        # for each variable do the K-fold cross-validate and evaluate on the validation and test sets
-        params = {}
-        for target in TARGET_VARIABLES_WITH_MULTI:
-            folder_name = f"{target}_model"
-            params_path = os.path.join(self.save_dir, folder_name, "params.json")
-            with open(params_path, "r") as f:
-                params[target] = json.load(f)
-
-        # todo - ready for one model - multi / plsr
-        self.k_fold_cross_validate_model(X_train, y_train, 'model name', params)
-
-        for target in TARGET_VARIABLES_WITH_MULTI:
-            model = joblib.load(os.path.join(self.save_dir, f"{target}_model", f"{target}_model.pkl"))
-            self.evaluate_models_on_validation_sets(target, X_val, y_val, model)
-
-        best_model = self.get_best_model()
-        print(f"Best Model: {best_model}")
-
-        self.evaluate_best_model_on_test_set(test_path, best_model)
+        self.k_fold_cross_validate_model(X_train, y_train, self.model_name, best_params)
+        self.evaluate_model(X_val, y_val, self.model, dataset_type='validation')
+        self.save_model_object()
+        self.evaluate_model(X_test, y_test, self.model, dataset_type='test')
