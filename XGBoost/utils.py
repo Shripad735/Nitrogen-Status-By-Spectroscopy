@@ -1,33 +1,66 @@
 import os
-import json
 import joblib
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-
-from constants_config import COLOR_PALETTE, TARGET_VARIABLES_WITH_MEAN, NON_FEATURE_COLUMNS, TARGET_VARIABLES
-
-
-def save_best_model_and_params(model, params, train_rmses, val_rmses, directory="XGBoost_final_model"):
-    os.makedirs(directory, exist_ok=True)
-    joblib.dump(model, os.path.join(directory, "model.pkl"))
-    with open(os.path.join(directory, "params.json"), "w") as f:
-        json.dump(params, f)
-    with open(os.path.join(directory, "train_rmses.json"), "w") as f:
-        json.dump({k: v.tolist() for k, v in train_rmses.items()}, f)
-    with open(os.path.join(directory, "val_rmses.json"), "w") as f:
-        json.dump({k: v.tolist() for k, v in val_rmses.items()}, f)
+from constants_config import COLOR_PALETTE_FOR_TARGET_VARIABLES, TARGET_VARIABLES_WITH_MEAN, NON_FEATURE_COLUMNS, \
+    TARGET_VARIABLES, COLOR_PALETTE_FOR_TWO_MODELS
 
 
-def load_best_model_and_params(directory="XGBoost_final_model"):
-    model = joblib.load(os.path.join(directory, "model.pkl"))
-    with open(os.path.join(directory, "params.json"), "r") as f:
-        params = json.load(f)
-    with open(os.path.join(directory, "train_rmses.json"), "r") as f:
-        train_rmses = json.load(f)
-    with open(os.path.join(directory, "val_rmses.json"), "r") as f:
-        val_rmses = json.load(f)
-    return model, params, train_rmses, val_rmses
+def ensure_data_paths_exist(data_folder_path):
+    """Ensure the directory exists and return paths for train, validation, and test data."""
+    os.makedirs(data_folder_path, exist_ok=True)
+
+    train_path = os.path.join(data_folder_path, 'train_data.parquet')
+    val_path = os.path.join(data_folder_path, 'validation_data.parquet')
+    test_path = os.path.join(data_folder_path, 'test_data.parquet')
+    train_plsr_path = os.path.join(data_folder_path, 'train_data_plsr.parquet')
+    val_plsr_path = os.path.join(data_folder_path, 'validation_data_plsr.parquet')
+    test_plsr_path = os.path.join(data_folder_path, 'test_data_plsr.parquet')
+
+    return train_path, val_path, test_path, train_plsr_path, val_plsr_path, test_plsr_path
+
+
+def load_model(directory):
+    return joblib.load(os.path.join(directory, "model.pkl"))
+
+
+def plot_chosen_configurations_rmse(model1, model2, save_dir):
+    """Bar plot of RMSE scores for the chosen configuration comparing two models."""
+    labels = TARGET_VARIABLES_WITH_MEAN
+    model1_rmse_values = [model1.targets_rmses_for_best_params[target] for target in labels]
+    model2_rmse_values = [model2.targets_rmses_for_best_params[target] for target in labels]
+
+    x = range(len(labels))  # the label locations
+    width = 0.35  # the width of the bars
+
+    fig, ax = plt.subplots(figsize=(12, 6))
+
+    # Plotting the bars for both models
+    bars1 = ax.bar(x, model1_rmse_values, width, label=model1.model_name, color=COLOR_PALETTE_FOR_TWO_MODELS['model1'])
+    bars2 = ax.bar([p + width for p in x], model2_rmse_values, width, label=model2.model_name,
+                   color=COLOR_PALETTE_FOR_TWO_MODELS['model2'])
+
+    # Add RMSE scores on top of each bar
+    for bar in bars1:
+        yval = bar.get_height()
+        ax.text(bar.get_x() + bar.get_width() / 2, yval, round(yval, 2), va='bottom', ha='center')
+    for bar in bars2:
+        yval = bar.get_height()
+        ax.text(bar.get_x() + bar.get_width() / 2, yval, round(yval, 2), va='bottom', ha='center')
+
+    # Adding labels, title, and legend
+    ax.set_xlabel('Target Variable')
+    ax.set_ylabel('RMSE')
+    ax.set_title('Comparison of RMSE Scores for Two Models')
+    ax.set_xticks([p + width / 2 for p in x])
+    ax.set_xticklabels(labels)
+    ax.legend()
+
+    plt.tight_layout()
+    os.makedirs(save_dir, exist_ok=True)
+    plt.savefig(os.path.join(save_dir, "comparison_rmse.png"))
+    plt.show()
 
 
 def get_X_y(data_path, dataset='train'):
@@ -39,85 +72,110 @@ def get_X_y(data_path, dataset='train'):
     return X, y
 
 
-def plot_learning_curve(xgb_multi_output, config_name, save_dir):
+def plot_learning_curves(model1, model2, save_dir):
+    """Plot learning curves for two models side by side."""
+
+    def plot_learning_curve(ax, model, config_name):
+        n_estimators = model.best_params['n_estimators']
+        x_axis = range(1, n_estimators + 1)
+
+        for var in TARGET_VARIABLES:
+            train_rmse_mean = model.train_rmses[f'{var}'][:n_estimators]
+            val_rmse_mean = model.val_rmses[f'{var}'][:n_estimators]
+
+            train_color, val_color = COLOR_PALETTE_FOR_TARGET_VARIABLES.get(var, ('#D3D3D3', '#DCDCDC'))
+
+            ax.plot(x_axis, train_rmse_mean, label=f"Train RMSE - {var}", color=train_color)
+            ax.plot(x_axis, val_rmse_mean, label=f"Validation RMSE - {var}", color=val_color)
+
+        ax.set_title(f"Learning Curve for {config_name}")
+        ax.set_xlabel("Number of Estimators")
+        ax.set_ylabel("RMSE")
+        ax.legend()
+        ax.grid()
+
     # Ensure the directory exists
     os.makedirs(save_dir, exist_ok=True)
 
-    plt.figure(figsize=(10, 6))
+    fig, axs = plt.subplots(1, 2, figsize=(20, 10))
 
-    for var in TARGET_VARIABLES_WITH_MEAN:
-        n_estimators = xgb_multi_output.best_params[var]['n_estimators']
-        x_axis = range(1, n_estimators + 1)
+    config_name1 = model1.model_name
+    config_name2 = model2.model_name
 
-        train_rmse_mean = xgb_multi_output.train_rmses[var][:n_estimators]
-        val_rmse_mean = xgb_multi_output.val_rmses[var][:n_estimators]
+    plot_learning_curve(axs[0], model1, config_name1)
+    plot_learning_curve(axs[1], model2, config_name2)
 
-        train_color, val_color = COLOR_PALETTE.get(var, ('#D3D3D3', '#DCDCDC'))  # default to light gray
-
-        plt.plot(x_axis, train_rmse_mean, label=f"Train RMSE - {var}", color=train_color)
-        plt.plot(x_axis, val_rmse_mean, label=f"Validation RMSE - {var}", color=val_color)
-
-    plt.title(f"All Learning Curves Based On The Best Configuration")
-    plt.xlabel("Number of Estimators")
-    plt.ylabel("RMSE")
-    plt.legend()
-    plt.grid()
-    plt.savefig(os.path.join(save_dir, f"learning_curve_{config_name}.png"))
+    plt.tight_layout()
+    plt.savefig(os.path.join(save_dir, f"learning_curves_{config_name1}_vs_{config_name2}.png"))
     plt.show()
 
 
-def plot_feature_importances(xgb_multi_output, save_dir):
-    """Plots mean feature importance."""
-    all_importances = []
-    for key, model in xgb_multi_output.model.items():
-        if isinstance(model, list):
-            for est in model:
-                all_importances.append(est.feature_importances_)
-        else:
-            all_importances.append(model.feature_importances_)
+def plot_feature_importances(model1, model2, save_dir):
+    """Plot feature importances for two models side by side."""
 
-    mean_importance = np.mean(all_importances, axis=0)
-    sorted_idx = np.argsort(mean_importance)[::-1]
-    X_train, _ = get_X_y('../datasets/train_data.parquet', dataset='train')
-    feature_names = X_train.columns[sorted_idx]
-    mean_importance = mean_importance[sorted_idx]
+    def plot_importance(ax, model, title, num_features, color):
+        importances = model.get_feature_importances()
+        indices = np.argsort(importances)[::-1][:num_features]
+        features = [model.get_feature_names()[i] for i in indices]
 
-    plt.figure(figsize=(12, 6))
-    plt.bar(feature_names[:20], mean_importance[:20])
-    plt.xticks(rotation=90)
-    plt.title("Mean Feature Importance")
-    plt.xlabel("Feature")
-    plt.ylabel("Mean Importance Score")
-    plt.tight_layout()
-    plt.savefig(os.path.join(save_dir, "mean_feature_importance.png"))
-    plt.show()
+        ax.barh(range(len(indices)), importances[indices], align='center', color=color)
+        ax.set_yticks(range(len(indices)))
+        ax.set_yticklabels(features)
+        ax.invert_yaxis()
+        ax.set_title(title)
+        ax.set_xlabel('Feature Importance')
 
-
-def plot_residuals(xgb_multi_output, save_dir):
-    X_val, y_val = get_X_y('../datasets/test_data.parquet', dataset='val')
-    y_pred = np.zeros((X_val.shape[0], len(xgb_multi_output.model)))
-
-    for var in xgb_multi_output.model:
-        if isinstance(xgb_multi_output.model[var], list):
-            pass
-        else:
-            y_pred[:, list(xgb_multi_output.model.keys()).index(var)] = xgb_multi_output.model[var].predict(X_val)
-
-    # Slice the first three columns from y_val and y_pred
-    y_val_first_three = y_val.iloc[:, :3]
-    y_pred_first_three = y_pred[:, :3]
-
-    # Calculate residuals for the first three columns
-    residuals = y_val_first_three.values - y_pred_first_three
-    residuals = residuals.flatten()  # Flatten to a 1D array
-
-    plt.figure(figsize=(8, 6))
-    plt.scatter(y_pred_first_three.flatten(), residuals, alpha=0.5)
-    plt.xlabel("Predicted Values")
-    plt.ylabel("Residuals Values")
-    plt.title("Residuals Plot for For Target Variables")
-    plt.axhline(y=0, color="r", linestyle="--")
-    plt.tight_layout()
+    # Ensure the directory exists
     os.makedirs(save_dir, exist_ok=True)
-    plt.savefig(os.path.join(save_dir, "residuals_plot_for_target_values.png"))
+
+    # Calculate the minimum number of features between the two models
+    num_features = min(len(model1.get_feature_importances()), len(model2.get_feature_importances()))
+
+    fig, axs = plt.subplots(1, 2, figsize=(20, 10))
+
+    plot_importance(axs[0], model1, f'{model1.model_name} Feature Importances', num_features,
+                    COLOR_PALETTE_FOR_TWO_MODELS['model1'])
+    plot_importance(axs[1], model2, f'{model2.model_name}  Feature Importances', num_features,
+                    COLOR_PALETTE_FOR_TWO_MODELS['model2'])
+
+    plt.tight_layout()
+    plt.savefig(os.path.join(save_dir, "feature_importances_comparison.png"))
     plt.show()
+
+
+def plot_residuals(model1, model2, directory1, directory2, save_dir):
+    # Get the number of target variables
+    num_targets1 = len(model1.model.estimators_)
+    num_targets2 = len(model2.model.estimators_)
+
+    X_test1, y_test1 = get_X_y(directory1, dataset='val')
+    X_test2, y_test2 = get_X_y(directory2, dataset='val')
+    y_pred1 = np.zeros((X_test1.shape[0], num_targets1))
+    y_pred2 = np.zeros((X_test2.shape[0], num_targets2))
+
+    for i, estimator in enumerate(model1.model.estimators_):
+        y_pred1[:, i] = estimator.predict(X_test1)
+
+    for i, estimator in enumerate(model2.model.estimators_):
+        y_pred2[:, i] = estimator.predict(X_test2)
+
+    # Calculate residuals for each model
+    residuals1 = y_test1.values - y_pred1
+    residuals2 = y_test2.values - y_pred2
+
+    # Plot residuals for each target variable
+    for i, var in enumerate(y_test1.columns):
+        plt.figure(figsize=(8, 6))
+        plt.scatter(y_pred1[:, i], residuals1[:, i], alpha=0.5, label=f'{model1.model_name} Residuals',
+                    color=COLOR_PALETTE_FOR_TWO_MODELS['model1'])
+        plt.scatter(y_pred2[:, i], residuals2[:, i], alpha=0.5, label=f'{model2.model_name} Residuals',
+                    color=COLOR_PALETTE_FOR_TWO_MODELS['model2'])
+        plt.xlabel("Predicted Values")
+        plt.ylabel("Residuals Values")
+        plt.title(f"Residuals Plot for {var}")
+        plt.axhline(y=0, color="r", linestyle="--")
+        plt.legend()
+        plt.tight_layout()
+        os.makedirs(save_dir, exist_ok=True)
+        plt.savefig(os.path.join(save_dir, f"residuals_plot_{var}.png"))
+        plt.show()
