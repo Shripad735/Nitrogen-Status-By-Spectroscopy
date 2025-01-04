@@ -1,8 +1,12 @@
 from RF import RFModel
 from baseline_for_training.Dataset import Dataset
 
+# Set Training Mode
+TRAINING_MODE = False
+MODEL_PATH = './models'
+
 param_grid = {
-        'n_estimators': [100, 200],
+        'n_estimators': [50, 100, 200],
         'max_depth': [10, 20, None],
         'min_samples_split': [2, 5],
         'min_samples_leaf': [1, 2]
@@ -16,10 +20,13 @@ dataset = Dataset(
     )
 
 # Initialize and run RFModel
-rf_model = RFModel(dataset, param_grid)
+rf_model = RFModel(dataset, param_grid, MODEL_PATH)
+
+if TRAINING_MODE:
+    rf_model.run()
+
+else:
+    rf_model = rf_model.load_model()
+    rf_model.eval_plot()
 
 
-print("Model training and evaluation complete.")
-print(f"Best Hyperparameters: {results['best_params']}")
-print(f"Cross-Validation Average RMSE: {results['cv_avg_rmse']}")
-print(f"Test RMSE: {results['test_rmse']}")
