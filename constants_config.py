@@ -26,6 +26,7 @@ class CropPart(str, Enum):
 TARGET_VARIABLES = [ColumnName.n_value.value, ColumnName.sc_value.value, ColumnName.st_value.value]
 NON_FEATURE_COLUMNS = [ColumnName.id.value] + TARGET_VARIABLES
 MEAN = 'Mean'
+AVG_RMSE = 'Avg_RMSE'
 TARGET_VARIABLES_WITH_MEAN = TARGET_VARIABLES + [MEAN]
 MULTI = 'Multi'
 PLSR_BASED_MODEL = 'PLSR_based_model'
@@ -48,4 +49,12 @@ COLOR_PALETTE_FOR_TWO_MODELS = {
     'model1': '#AEC6CF',  # Light Blue
     'model2': '#FFB347'  # Light Orange
 }
+
+COLOR_PALETTE_FOR_PLSR = {
+    f'{ColumnName.n_value.value}': '#F4A261',  # warm orange
+    f'{ColumnName.sc_value.value}': '#FFB6C1',  # light pink
+    f'{ColumnName.st_value.value}': '#FF6347',  # tomato red
+    f'{AVG_RMSE}': '#FFDDC1'  # peach
+}
+
 
