@@ -8,6 +8,7 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 import numpy as np
+import json
 
 
 # creating Dataset Instance
@@ -71,6 +72,15 @@ n_value_rmses = hyperParameterTuning(n_value_PLSR,PLSR_Tuning = PLSR_Tuning)
 sc_value_rmses = hyperParameterTuning(sc_value_PLSR,PLSR_Tuning = PLSR_Tuning)
 st_value_rmses = hyperParameterTuning(st_value_PLSR,PLSR_Tuning = PLSR_Tuning)
 
+path = './outputs/'
+def create_json_file(rmses, filename):
+    with open(filename, 'w') as f:
+        json.dump(rmses, f)
+
+create_json_file(multi_rmses, path + 'multi_rmses.json')
+create_json_file(n_value_rmses, path + 'n_value_rmses.json')
+create_json_file(sc_value_rmses, path + 'sc_value_rmses.json')
+create_json_file(st_value_rmses, path + 'st_value_rmses.json')
 
 # Get the best number of components for each model
 best_n_components = sorted(multi_rmses['Avg_RMSE'], key = lambda x:x[1])[0][0]['n_components']
@@ -85,27 +95,6 @@ print('Best SC Value PLSR Number of Components:', best_sc_value_n_components)
 
 best_st_value_n_components = sorted(st_value_rmses['ST_Value'], key = lambda x:x[1])[0][0]['n_components']
 print('Best ST Value PLSR Number of Components:', best_st_value_n_components)
-
-
-# Plot the RMSE vs Number of Components
-plt.figure(figsize=(10, 6))
-
-plt.plot([i for i in range(1,51)], [i[1] for i in multi_rmses['Avg_RMSE']], label = 'Multi Output PLSR')
-plt.plot([i for i in range(1,51)], [i[1] for i in n_value_rmses['N_Value']], label = 'N Value PLSR')
-plt.plot([i for i in range(1,51)], [i[1] for i in sc_value_rmses['SC_Value']], label = 'SC Value PLSR')
-plt.plot([i for i in range(1,51)], [i[1] for i in st_value_rmses['ST_Value']], label = 'ST Value PLSR')
-
-plt.scatter(best_n_components, multi_rmses['Avg_RMSE'][best_n_components-1][1], color = 'red')
-plt.scatter(best_n_value_n_components, n_value_rmses['N_Value'][best_n_value_n_components-1][1], color = 'red')
-plt.scatter(best_sc_value_n_components, sc_value_rmses['SC_Value'][best_sc_value_n_components-1][1], color = 'red')
-plt.scatter(best_st_value_n_components, st_value_rmses['ST_Value'][best_st_value_n_components-1][1], color = 'red')
-
-plt.xlabel('Number of Components')
-plt.ylabel('RMSE')
-plt.title('RMSE vs Number of Components')
-plt.legend()
-plt.savefig('./Plots/RMSE_vs_Number_of_Components.png')
-
 
 
 # Training using CV10
@@ -124,101 +113,28 @@ sc_value_rmse = CV10(sc_value_PLSR)
 st_value_rmse = CV10(st_value_PLSR)
 
 
-# Plot the rmse values for each model as a function of folds
+# save the results in json file
 
-plt.figure(figsize=(10, 6))
+create_json_file(multi_rmse, path + 'multi_rmse_cv10.json')
+create_json_file(n_value_rmse, path + 'n_value_rmse_cv10.json')
+create_json_file(sc_value_rmse, path + 'sc_value_rmse_cv10.json')
+create_json_file(st_value_rmse, path + 'st_value_rmse_cv10.json')
 
-plt.plot([i for i in range(1,11)], multi_rmse['Avg_RMSE'], label = 'Multi Output PLSR')
-plt.plot([i for i in range(1,11)], n_value_rmse['N_Value'], label = 'N Value PLSR')
-plt.plot([i for i in range(1,11)], sc_value_rmse['SC_Value'], label = 'SC Value PLSR')
-plt.plot([i for i in range(1,11)], st_value_rmse['ST_Value'], label = 'ST Value PLSR')
-
-plt.xlabel('Folds')
-plt.ylabel('RMSE')
-plt.title('RMSE vs Folds')
-plt.legend()
-plt.savefig('./Plots/RMSE_vs_Folds.png')
-
-
-# print RMSE results - Evaluation
-n_value_test_rmse, sc_value_test_rmse, st_value_test_rmse = multi_PLSR.evaluate()
-print(f' Multi Output PLSR RMSE: {np.mean([n_value_test_rmse, sc_value_test_rmse, st_value_test_rmse])}\n N Value PLSR RMSE: {n_value_test_rmse}\n SC Value PLSR RMSE: {sc_value_test_rmse}\n ST Value PLSR RMSE: {st_value_test_rmse}')
-
-
-n_value_single_rmse = n_value_PLSR.evaluate()
-sc_value_single_rmse = sc_value_PLSR.evaluate()
-st_value_single_rmse = st_value_PLSR.evaluate()
-
-print(f' N Value PLSR RMSE: {n_value_single_rmse}\n SC Value PLSR RMSE: {sc_value_single_rmse}\n ST Value PLSR RMSE: {st_value_single_rmse}')
-
-
-# Plot the predicted vs actual values for each model
-
-y_hat = multi_PLSR.model.predict(dataset.X_test)
-y_hat = Y_scaler.inverse_transform(y_hat)
-y_test = Y_scaler.inverse_transform(dataset.Y_test)
-
-fig, axs = plt.subplots(2, 2, figsize=(15, 15))
-
-axs[0, 0].scatter(y_test[:,0], y_hat[:,0])
-axs[0, 0].set_title('N Value PLSR')
-axs[0, 0].set_xlabel('Actual')
-axs[0, 0].set_ylabel('Predicted')
-
-axs[0, 1].scatter(y_test[:,1], y_hat[:,1])
-axs[0, 1].set_title('SC Value PLSR')
-axs[0, 1].set_xlabel('Actual')
-axs[0, 1].set_ylabel('Predicted')
-
-axs[1, 0].scatter(y_test[:,2], y_hat[:,2])
-axs[1, 0].set_title('ST Value PLSR')
-axs[1, 0].set_xlabel('Actual')
-
-# Disable last plot
-axs[1, 1].axis('off')
-plt.savefig('./Plots/Predicted_vs_Actual_Values.png')
-
-
-
-# Plot the residuals against the predicted values for the multi output PLSR model
-
-fig, axs = plt.subplots(2, 2, figsize=(15, 15))
-
-residuals = y_test - y_hat
-
-axs[0, 0].scatter(y_hat[:,0], residuals[:,0])
-axs[0, 0].set_title('N Value PLSR')
-axs[0, 0].set_xlabel('Predicted')
-axs[0, 0].set_ylabel('Residual')
-axs[0, 0].axhline(y=0, color='r', linestyle='-')
-
-axs[0, 1].scatter(y_hat[:,1], residuals[:,1])
-axs[0, 1].set_title('SC Value PLSR')
-axs[0, 1].set_xlabel('Predicted')
-axs[0, 1].set_ylabel('Residual')
-axs[0, 1].axhline(y=0, color='r', linestyle='-')
-
-axs[1, 0].scatter(y_hat[:,2], residuals[:,2])
-axs[1, 0].set_title('ST Value PLSR')
-axs[1, 0].set_xlabel('Predicted')
-axs[1, 0].axhline(y=0, color='r', linestyle='-')
-
-# Disable last plot
-axs[1, 1].axis('off')
-plt.savefig('./Plots/Residuals_vs_Predicted_Values.png')
 
 # Fit model on all  of the data -  for saving only
-
 multi_PLSR.model.estimator.fit(dataset.X_train, dataset.Y_train)
 n_value_PLSR.model.fit(dataset.X_train, dataset.Y_train.iloc[:,0])
 sc_value_PLSR.model.fit(dataset.X_train, dataset.Y_train.iloc[:,1])
 st_value_PLSR.model.fit(dataset.X_train, dataset.Y_train.iloc[:,2])
 
+# Eval on test data
+rmses = multi_PLSR.evaluate()
+# save results
+create_json_file(rmses, path + 'multi_rmse_test.json')
 # save model
-
 import joblib
-
 joblib.dump(multi_PLSR.model.estimator, './models/multi_plsr.pkl')
+
 
 
 
