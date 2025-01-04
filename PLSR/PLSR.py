@@ -1,146 +1,139 @@
-from tqdm import tqdm
+from PLSR_class import PLSRModel
+import sys
+sys.path.append('../baseline_for_training')
+sys.path.append('../.')
+from Dataset import Dataset
+from sklearn.preprocessing import StandardScaler
+import pandas as pd
+import seaborn as sns
 import matplotlib.pyplot as plt
 import numpy as np
-
-from sklearn.cross_decomposition import PLSRegression
-from sklearn.multioutput import MultiOutputRegressor
-from sklearn.model_selection import KFold
-from sklearn.metrics import mean_squared_error
+import json
 
 
-class MultiOutputPLSRegression:
+# creating Dataset Instance
+train_file_name = 'train_data.parquet'
+validation_file_name = 'validation_data.parquet'
+test_file_name = 'test_data.parquet'
+dataset = Dataset(train_file_name,validation_file_name,test_file_name)
 
-    def __init__(self, n_splits=10, random_state=42):
-        self.n_splits = n_splits
-        self.random_state = random_state
-        self.multiPLSR = None
-
-    def evaluatePerformance(self, X_train, Y_train, X_val, Y_val):
-
-        """
-        Evaluates the performance of the PLSR model on the validation set and returns the RMSE 
-
-        pls - PLSR model (sklearn)
-
-        X_train - numpy array, training data
-        Y_train - numpy array, training dependent variable
-
-        X_val - numpy array, validation data
-        Y_val - numpy array, validation dependent variable
-
-        """
-        if self.multiPLSR is None:
-            print(f"Define the model before evaluating it's performance")
-            return
-        
-        self.multiPLSR.fit(X_train,Y_train)
-        Y_pred = self.multiPLSR.predict(X_val)
-
-        # Compute RMSE
-        mse = mean_squared_error(Y_val, Y_pred,multioutput='uniform_average')
-        rmse = np.sqrt(mse)
-        return rmse
-    
-
-    def findOptimalNumberOfComponents(self, X_train, Y_train,X_val,Y_val, maximum_components):
-        """
-        Finds the optimal number of components to use in the PLSR model
+# Correlation matrix - dependent variables
+plt.figure(figsize=(8,5))
+sns.heatmap(pd.concat([dataset.Y_train, dataset.Y_val,dataset.Y_test],axis=0).corr(),annot=True,fmt=".2f",cmap='Reds')
+plt.title('Correlation matrix for X and Y')
+plt.savefig('./Plots/Correlation_matrix.png')
 
 
-        X_train - numpy array, training data 
-        Y_train - numpy array, training dependent variable
+# Pair plot - dependent variables
+plt.figure(figsize=(8,5))
+sns.pairplot(pd.concat([dataset.Y_train, dataset.Y_val,dataset.Y_test],axis=0))
+plt.savefig('./Plots/Pair_plot.png')
 
-        X_val - numpy array, validation data
-        Y_val - numpy array, validation dependent variable
 
-        maximum_components - int, number of components to use in the PLSR model
 
-        """
+# Preprocessing Data
 
-        rmse_list = []
-        n_components_list = list(range(1,maximum_components + 1))
-        self.optimization_metric_results = {}
+X_scaler = StandardScaler()
+Y_scaler = StandardScaler()
 
-        for n_components in tqdm( n_components_list,
-                                 desc='Optimizing Number of Components', 
-                                 total=len(n_components_list)):
-            # Init PLSR
-            pls = PLSRegression(n_components=n_components)
-            self.multiPLSR = MultiOutputRegressor(pls)
+dataset.X_train[dataset.X_train.columns] = X_scaler.fit_transform(dataset.X_train.values)
+dataset.Y_train[dataset.Y_train.columns] = Y_scaler.fit_transform(dataset.Y_train.values)
 
-            # Evaluate performance on the validation set
-            rmse = self.evaluatePerformance(X_train, Y_train, X_val, Y_val)
+dataset.X_val[dataset.X_val.columns] = X_scaler.transform(dataset.X_val.values)
+dataset.Y_val[dataset.Y_val.columns] = Y_scaler.transform(dataset.Y_val.values)
 
-            # Store the results
-            self.optimization_metric_results[n_components] = rmse 
+dataset.X_test[dataset.X_test.columns] = X_scaler.transform(dataset.X_test.values)
+dataset.Y_test[dataset.Y_test.columns] = Y_scaler.transform(dataset.Y_test.values)
 
-            rmse_list.append(rmse)
-        
-        # Will be switch anyways...
-        self.multiPLSR = None
-            
-        return rmse_list
-    
-    def plotMetricResults(self):
-        """
-        Plots the results of the optimization metric 
-        """
 
-        # Extract the number of components and RMSE values
-        n_components = list(self.optimization_metric_results.keys())
-        rmse_values = [self.optimization_metric_results[key] for key in n_components]
+# Preparing Models
 
-        # Plot the RMSE values
-        plt.plot(n_components, rmse_values, label='RMSE')
+# Flags for the PLSR model
+is_multi_output = True
+PLSR_Tuning = True
 
-        # Mark the minimum RMSE value with a red dot
-        min_rmse = min(rmse_values)
-        min_rmse_key = n_components[rmse_values.index(min_rmse)]
-        plt.plot(min_rmse_key, min_rmse, 'ro', label=f'Min RMSE at {min_rmse_key} components')
+# Define the parameter grid
+param_grid = {'n_components': [i for i in range(1,51)]}
 
-        # Formatting plot
-        plt.xlabel('Number of Components')
-        plt.xticks(rotation=45)
-        plt.ylabel('RMSE')
-        plt.legend()
-        plt.title('Optimization Metric: RMSE')
-        plt.tight_layout()
-        plt.show()
+# Create the PLSR models
+multi_PLSR = PLSRModel(dataset, param_grid, is_multi_output)
+n_value_PLSR = PLSRModel(dataset, param_grid, not is_multi_output, "N_Value")
+sc_value_PLSR = PLSRModel(dataset, param_grid, not is_multi_output, "SC_Value")
+st_value_PLSR = PLSRModel(dataset, param_grid, not is_multi_output, "ST_Value")
 
-    
-   
-    def crossValidation(self, X_train, Y_train, n_components):
-        """
-        Performs CV-10 on the training data.
 
-        For training only!!! So use this after you have selected the optimal number of components
+# Hyperparameter Tuning
 
-        X_train - numpy array, training data 
-        Y_train - numpy array, training dependent variable
+from Training_and_Tuning import hyperParameterTuning
 
-        n_components - int, number of components to use in the PLSR model (optimal)
-        n_splits - int, number of splits to use in the KFold cross validation
+# Perform hyperparameter tuning
+multi_rmses = hyperParameterTuning(multi_PLSR,PLSR_Tuning = PLSR_Tuning)
+n_value_rmses = hyperParameterTuning(n_value_PLSR,PLSR_Tuning = PLSR_Tuning)
+sc_value_rmses = hyperParameterTuning(sc_value_PLSR,PLSR_Tuning = PLSR_Tuning)
+st_value_rmses = hyperParameterTuning(st_value_PLSR,PLSR_Tuning = PLSR_Tuning)
 
-        """
+path = './outputs/'
+def create_json_file(rmses, filename):
+    with open(filename, 'w') as f:
+        json.dump(rmses, f)
 
-        # Initialize the PLSR model with the optimal number of components
-        pls = PLSRegression(n_components=n_components)
-        self.multiPLSR = MultiOutputRegressor(pls)
+create_json_file(multi_rmses, path + 'multi_rmses.json')
+create_json_file(n_value_rmses, path + 'n_value_rmses.json')
+create_json_file(sc_value_rmses, path + 'sc_value_rmses.json')
+create_json_file(st_value_rmses, path + 'st_value_rmses.json')
 
-        kf = KFold(n_splits=self.n_splits, random_state=self.random_state, shuffle=True)
+# Get the best number of components for each model
+best_n_components = sorted(multi_rmses['Avg_RMSE'], key = lambda x:x[1])[0][0]['n_components']
+print('Best Multi Output PLSR Number of Components:', best_n_components)
 
-        rmses = []
-        
-        for train_index, val_index in tqdm(kf.split(X_train), desc='Cross Validation', total=self.n_splits):
+best_n_value_n_components = sorted(n_value_rmses['N_Value'], key = lambda x:x[1])[0][0]['n_components']
+print('Best N Value PLSR Number of Components:', best_n_value_n_components)
 
-            X_train_fold, X_val_fold = X_train[train_index], X_train[val_index]
-            Y_train_fold, Y_val_fold = Y_train[train_index], Y_train[val_index]
 
-            rmse_fold = self.evaluatePerformance(X_train_fold, Y_train_fold, X_val_fold, Y_val_fold)
+best_sc_value_n_components = sorted(sc_value_rmses['SC_Value'], key = lambda x:x[1])[0][0]['n_components']
+print('Best SC Value PLSR Number of Components:', best_sc_value_n_components)
 
-            rmses.append(rmse_fold)
+best_st_value_n_components = sorted(st_value_rmses['ST_Value'], key = lambda x:x[1])[0][0]['n_components']
+print('Best ST Value PLSR Number of Components:', best_st_value_n_components)
 
-        return rmses 
+
+# Training using CV10
+from Training_and_Tuning import CV10
+
+# Set the best number of components
+multi_PLSR.model.estimator.set_params(n_components = best_n_components)
+n_value_PLSR.model.set_params(n_components = best_n_value_n_components)
+sc_value_PLSR.model.set_params(n_components = best_sc_value_n_components)
+st_value_PLSR.model.set_params(n_components = best_st_value_n_components)
+
+# Perform 10-fold cross validation
+multi_rmse = CV10(multi_PLSR)
+n_value_rmse = CV10(n_value_PLSR)
+sc_value_rmse = CV10(sc_value_PLSR)
+st_value_rmse = CV10(st_value_PLSR)
+
+
+# save the results in json file
+
+create_json_file(multi_rmse, path + 'multi_rmse_cv10.json')
+create_json_file(n_value_rmse, path + 'n_value_rmse_cv10.json')
+create_json_file(sc_value_rmse, path + 'sc_value_rmse_cv10.json')
+create_json_file(st_value_rmse, path + 'st_value_rmse_cv10.json')
+
+
+# Fit model on all  of the data -  for saving only
+multi_PLSR.model.estimator.fit(dataset.X_train, dataset.Y_train)
+n_value_PLSR.model.fit(dataset.X_train, dataset.Y_train.iloc[:,0])
+sc_value_PLSR.model.fit(dataset.X_train, dataset.Y_train.iloc[:,1])
+st_value_PLSR.model.fit(dataset.X_train, dataset.Y_train.iloc[:,2])
+
+# Eval on test data
+rmses = multi_PLSR.evaluate()
+# save results
+create_json_file(rmses, path + 'multi_rmse_test.json')
+# save model
+import joblib
+joblib.dump(multi_PLSR.model.estimator, './models/multi_plsr.pkl')
 
 
 
