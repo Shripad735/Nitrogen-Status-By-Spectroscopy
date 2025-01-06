@@ -2,7 +2,7 @@ import argparse
 from constants_config import DATA_FOLDER_PATH, FIGURE_FOLDER_PATH
 from XGBoost.xgboost_multioutput_implement import XGBoostMultiOutput
 from utils import plot_chosen_configurations_rmse, load_model, ensure_data_paths_exist, plot_learning_curves, \
-    plot_feature_importances, plot_residuals
+    plot_feature_importances, plot_residuals, save_test_scores
 
 
 def main(train: bool = False):
@@ -28,6 +28,9 @@ def main(train: bool = False):
     plot_learning_curves(xgb_multi_output, xgb_multi_output_plsr, FIGURE_FOLDER_PATH)
     plot_feature_importances(xgb_multi_output, xgb_multi_output_plsr, FIGURE_FOLDER_PATH)
     plot_residuals(xgb_multi_output, xgb_multi_output_plsr, test_path, test_plsr_path, FIGURE_FOLDER_PATH)
+
+    # Save test scores
+    save_test_scores(xgb_multi_output, xgb_multi_output_plsr, test_path, test_plsr_path, FIGURE_FOLDER_PATH)
 
 
 if __name__ == "__main__":
