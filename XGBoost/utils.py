@@ -1,4 +1,5 @@
 import os
+import json
 import joblib
 import numpy as np
 import pandas as pd
@@ -70,6 +71,31 @@ def get_X_y(data_path, dataset='train'):
         X = data[feature_columns]
         y = data[TARGET_VARIABLES]
     return X, y
+
+
+def save_test_scores(model1, model2, test_path1, test_path2, save_dir):
+    X_test1, y_test1 = get_X_y(test_path1, dataset='test')
+    X_test2, y_test2 = get_X_y(test_path2, dataset='test')
+
+    y_pred1 = model1.model.predict(X_test1)
+    y_pred2 = model2.model.predict(X_test2)
+
+    scores = {
+        model1.model_name: {},
+        model2.model_name: {}
+    }
+
+    for i, var in enumerate(y_test1.columns):
+        rmse1 = np.sqrt(np.mean((y_test1[var].values - y_pred1[:, i]) ** 2))
+        rmse2 = np.sqrt(np.mean((y_test2[var].values - y_pred2[:, i]) ** 2))
+        scores[model1.model_name][var] = rmse1
+        scores[model2.model_name][var] = rmse2
+
+    scores[model1.model_name]['mean_rmse'] = np.mean(list(scores[model1.model_name].values()))
+    scores[model2.model_name]['mean_rmse'] = np.mean(list(scores[model2.model_name].values()))
+
+    with open(os.path.join(save_dir, 'test_scores.json'), 'w') as f:
+        json.dump(scores, f, indent=4)
 
 
 def plot_learning_curves(model1, model2, save_dir):
