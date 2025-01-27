@@ -22,16 +22,11 @@ dataset = Dataset(train_file_name,validation_file_name,test_file_name)
 from sklearn.preprocessing import StandardScaler
 
 X_scaler = StandardScaler()
-Y_scaler = StandardScaler()
+
 
 dataset.X_train[dataset.X_train.columns] = X_scaler.fit_transform(dataset.X_train.values)
-dataset.Y_train[dataset.Y_train.columns] = Y_scaler.fit_transform(dataset.Y_train.values)
-
 dataset.X_val[dataset.X_val.columns] = X_scaler.transform(dataset.X_val.values)
-dataset.Y_val[dataset.Y_val.columns] = Y_scaler.transform(dataset.Y_val.values)
-
 dataset.X_test[dataset.X_test.columns] = X_scaler.transform(dataset.X_test.values)
-dataset.Y_test[dataset.Y_test.columns] = Y_scaler.transform(dataset.Y_test.values)
 
 
 X_train_plsr = multi_PLSR.x_scores_
