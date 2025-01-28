@@ -3,7 +3,7 @@
 # platform: osx-arm64
 
 sklearn
-python=3.10
+python
 numpy
 pandas
 matplotlib
